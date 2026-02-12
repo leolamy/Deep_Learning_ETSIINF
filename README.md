@@ -87,6 +87,39 @@ Some non-trainable params (not the case before): due to batchnorm -> the network
 
  ### EXPERIMENT 7 - file : ffnn_exp7_leo.ipynb
 #### changes : adding regularization to force the model to generalize => improve mean recall (performance on all classes and not only on the easiest one)
+#### results : 
+Mean Accuracy: 27.787%
+Mean Recall: 14.680%
+Mean Precision: 17.266% 
+=> not working
+
+### RECAP FIRST 7 EXPERIMENTS
+Exp,Change,Result,Status,Why?
+1 & 2,Baseline + Normalization,~37% Acc,Limit Reached,Model too simple to learn complex features.
+3,Added Hidden Layers,~20% Acc,Failed,Exploding parameters (154M). Input image is too big for a dense net; optimizer cannot converge.
+4,"AveragePooling(4,4)",~38.8% Acc,Mixed,"Best stability so far, but blind to small objects (Trucks/Boats) due to blurring."
+5,"MaxPooling(2,2)",~34% Acc,Unstable,Higher resolution brought back too much noise/parameters. Model struggled to converge.
+6,Added BatchNorm,74% Train / 57% Val,Overfitting,Model learned too well. It memorized the training data but failed to generalize (high variance).
+7,Added L2 Regularization,~27% Acc,Failed,"Penalty too harsh. The model collapsed (underfitting), predicting only one class to minimize the penalty."
+SOLUTION => remove penalty L2, keep batch norm, add dropout, reduce size layers (summarize info, keep only the important one)
+
+### EXPERIMENT 8 - ffnn_exp8_leo.ipynb
+#### changes - remove penalty L2, reducing layers, no dropout, pooling 3x3
+#### results : 
+NO DROPOUT
+training: 0.71 accuracy max
+Validation : Mean Accuracy: 35.253%
+Mean Recall: 25.108%
+Mean Precision: 28.520%
+WITH DROPOUT
+training: 
+validation: 
+
+### ARCHITECTURE PROPOSITIONS (we have to provide 3 architectures) 
+- Deep network (3 layers)
+- 1 big layer 
+- Compressed layer (512 -> 256 -> 128)
+
 ## Melen
 
 
