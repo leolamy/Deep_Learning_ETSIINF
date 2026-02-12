@@ -129,7 +129,7 @@ mean recall: 26% -> fail on little objects (hard to see the shapes but normal fo
     - epoch = 60
     - batch_size = 32
     - 3 layers (1024->512->256)
-'''Python
+```python
 # Load architecture
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Activation, Flatten, Input, AveragePooling2D, MaxPooling2D, BatchNormalization, Dropout
@@ -159,8 +159,8 @@ model.add(Dropout(0.5))
 model.add(Dense(len(categories)))
 model.add(Activation('softmax'))
 model.summary()
-'''
-- EXPERIMENT 10
+```
+
 ### BEST MODEL FOR NOW
 
 
