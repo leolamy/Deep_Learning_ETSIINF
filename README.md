@@ -17,12 +17,31 @@ Mean Precision: 34.686%
 #### comments : 
 overfitting, needs more layers 
 
-### EXPERIMENT 2 - file: ffnn_exp3_leo.ipynb
-#### changes : adding more hidden layers
+### EXPERIMENT 3 - file: ffnn_exp3_leo.ipynb
+#### changes : adding more hidden layers 
 #### Results : 
+Mean Accuracy: 20.213%
+Mean Recall: 15.045%
+Mean Precision: 5.799%
 
 #### comments : 
-more parameters
+1 layer of 1024 neurons + relu
+1 layer of 512 neurons + relu
+154 millions of parameters
+Image is too big when it is flattened (150 528 pixels dimensions(224*224*3))
+raw pixels + too much parameters -> optimizer is lost
+the mo
+Solution -> reduce image size (pooling)
+
+### EXPERIMENT 4 - file: ffnn_exp4_leo.ipynb
+#### changes : adding pooling to reduce image size -> reduce amount of parameters
+#### results
+Mean Accuracy: 38.827%
+Mean Recall: 39.409%
+Mean Precision: 42.877%
+#### comments : 
+Best results so far
+
 
 ## Melen
 
