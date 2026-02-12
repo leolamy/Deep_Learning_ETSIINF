@@ -112,13 +112,57 @@ Validation : Mean Accuracy: 35.253%
 Mean Recall: 25.108%
 Mean Precision: 28.520%
 WITH DROPOUT
-training: 
+training: 0.542
 validation: 
+Mean Accuracy: 40.853%
+Mean Recall: 31.170%
+Mean Precision: 40.354%
+
+### EXPERIMENT 9 - ffnn_final1_leo.ipynb
+#### changes - epoch 20->30 / batch_size : 16->32 / adding layers (1024->512->256 to generalize the model)
+#### results : 
+validation accuracy: 60.6% best one
+mean recall: 26% -> fail on little objects (hard to see the shapes but normal for a ffNN not a CNN)
 
 ### ARCHITECTURE PROPOSITIONS (we have to provide 3 architectures) 
-- Deep network (3 layers)
-- 1 big layer 
-- Compressed layer (512 -> 256 -> 128)
+- EXPERIMENT 9
+    - epoch = 60
+    - batch_size = 32
+    - 3 layers (1024->512->256)
+'''Python
+# Load architecture
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Activation, Flatten, Input, AveragePooling2D, MaxPooling2D, BatchNormalization, Dropout
+from tensorflow.keras.regularizers import l2
+
+print('Load model')
+model = Sequential()
+model.add(Input(shape=(224, 224, 3)))
+model.add(MaxPooling2D(pool_size=(3, 3)))
+model.add(Flatten())
+# adding hidden layers to improve model's complexity 
+model.add(Dense(1024))
+model.add(BatchNormalization())
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+
+model.add(Dense(512))
+model.add(BatchNormalization())
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+
+model.add(Dense(256))
+model.add(BatchNormalization())
+model.add(Activation('relu'))
+model.add(Dropout(0.5))
+
+model.add(Dense(len(categories)))
+model.add(Activation('softmax'))
+model.summary()
+'''
+- EXPERIMENT 10
+### BEST MODEL FOR NOW
+
 
 ## Melen
 
