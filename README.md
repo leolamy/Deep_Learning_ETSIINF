@@ -93,7 +93,7 @@ Mean Recall: 14.680%
 Mean Precision: 17.266% 
 => not working
 
-### RECAP FIRST 7 EXPERIMENTS
+## RECAP FIRST 7 EXPERIMENTS
 Exp,Change,Result,Status,Why?
 1 & 2,Baseline + Normalization,~37% Acc,Limit Reached,Model too simple to learn complex features.
 3,Added Hidden Layers,~20% Acc,Failed,Exploding parameters (154M). Input image is too big for a dense net; optimizer cannot converge.
@@ -118,51 +118,212 @@ Mean Accuracy: 40.853%
 Mean Recall: 31.170%
 Mean Precision: 40.354%
 
-### EXPERIMENT 9 - ffnn_final1_leo.ipynb
+### EXPERIMENT 9 - ffnn_exp9_leo.ipynb
 #### changes - epoch 20->30 / batch_size : 16->32 / adding layers (1024->512->256 to generalize the model)
 #### results : 
 validation accuracy: 60.6% best one
 mean recall: 26% -> fail on little objects (hard to see the shapes but normal for a ffNN not a CNN)
 
 ### ARCHITECTURE PROPOSITIONS (we have to provide 3 architectures) 
-- EXPERIMENT 9
-    - epoch = 60
+- EXPERIMENT 10
+    - epoch = 42
     - batch_size = 32
     - 3 layers (1024->512->256)
+    - swish activation
+```python
+# Load architecture
+# Load architecture
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Activation, Flatten, Input, AveragePooling2D, MaxPooling2D, BatchNormalization, Dropout
+from tensorflow.keras.losses import CategoricalFocalCrossentropy
+from tensorflow.keras.optimizers import AdamW
+from tensorflow.keras.activations import swish
+
+model = Sequential()
+model.add(Input(shape=(224, 224, 3)))
+model.add(MaxPooling2D(pool_size=(3, 3))) # pooling to reduce amount of parameters
+model.add(Flatten())
+
+# Layer 1
+model.add(Dense(1024))
+model.add(BatchNormalization())
+model.add(Activation('swish')) 
+#model.add(Dropout(0.4)) 
+
+# Layer 2
+model.add(Dense(512))
+model.add(BatchNormalization())
+model.add(Activation('swish'))
+#model.add(Dropout(0.4))
+
+# Layer 3
+model.add(Dense(256))
+model.add(BatchNormalization())
+model.add(Activation('swish'))
+#model.add(Dropout(0.4))
+
+# Output
+model.add(Dense(len(categories)))
+model.add(Activation('softmax'))
+
+# Scheduler & Compiler
+lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
+    initial_learning_rate=0.001, 
+    decay_steps=40 * (len(anns_train) // 32)
+)
+
+model.compile(
+    optimizer=Adam(learning_rate=lr_schedule, weight_decay=1e-4),
+    loss=CategoricalFocalCrossentropy(alpha=0.25, gamma=2.0),
+    metrics=['accuracy']
+)
+model.summary()
+```
+scheduler -> regulate speed at which model converges
+No regularization -> adding normalization / loss
+99% train 57% validation 
+
+- EXPERIMENT 11 
+    - epoch = 42
+    - batch_size = 32
+    - 3 layers (512->256->128)
+    - selu activation
+    - Adam Optimizer
+goal : generalize model and try not to diverge and fin little classes
 ```python
 # Load architecture
 from tensorflow.keras.models import Sequential
 from tensorflow.keras.layers import Dense, Activation, Flatten, Input, AveragePooling2D, MaxPooling2D, BatchNormalization, Dropout
-from tensorflow.keras.regularizers import l2
+from tensorflow.keras.losses import CategoricalFocalCrossentropy
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.activations import swish
 
-print('Load model')
 model = Sequential()
 model.add(Input(shape=(224, 224, 3)))
-model.add(MaxPooling2D(pool_size=(3, 3)))
+# Réduit le bruit et le nombre de paramètres drastiquement
+model.add(MaxPooling2D(pool_size=(4, 4))) 
 model.add(Flatten())
-# adding hidden layers to improve model's complexity 
-model.add(Dense(1024))
-model.add(BatchNormalization())
-model.add(Activation('relu'))
-model.add(Dropout(0.5))
 
-model.add(Dense(512))
-model.add(BatchNormalization())
-model.add(Activation('relu'))
-model.add(Dropout(0.5))
+# Layer 1
+model.add(Dense(512, kernel_initializer='lecun_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('selu')) 
+#model.add(Dropout(0.4)) 
 
-model.add(Dense(256))
-model.add(BatchNormalization())
-model.add(Activation('relu'))
-model.add(Dropout(0.5))
+# Layer 2
+model.add(Dense(256, kernel_initializer='lecun_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('selu'))
+#model.add(Dropout(0.4))
 
+# Layer 3
+model.add(Dense(128, kernel_initializer='lecun_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('selu'))
+#model.add(Dropout(0.4))
+
+# Output
 model.add(Dense(len(categories)))
 model.add(Activation('softmax'))
+
+# Learning rate légèrement plus bas car SELU est très dynamique
+lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
+    initial_learning_rate=0.0005, 
+    decay_steps=40 * (len(anns_train) // 32)
+)
+
+model.compile(
+    optimizer=Adam(learning_rate=lr_schedule),
+    # Gamma plus fort pour récupérer les "Fishing Vessels" la ou recall plus bas 
+    loss=CategoricalFocalCrossentropy(alpha=0.25, gamma=3.0), 
+    metrics=['accuracy']
+)
 model.summary()
 ```
+SELU -> données "s'auto-normalisent", utiliser une initialisation type lecun pour garder une variance constante tout au long du réseau (1/n) pour garder des données normalisée (remplacer batch norm)
+training:
+val_accuracy 0.602666676044
+validation:
+Mean Accuracy: 24.747%
+Mean Recall: 19.766%
+Mean Precision: 29.996%
 
-### BEST MODEL FOR NOW
+- Experiment 12
+    - epoch = 42
+    - batch_size = 32
+    - 3 layers (512->256->128)
+    - swish activation
+    - AdamW Optimizer
+    goal : reduce overfitting
+```python
+# Load architecture
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Activation, Flatten, Input, AveragePooling2D, MaxPooling2D, BatchNormalization, Dropout
+from tensorflow.keras.losses import CategoricalFocalCrossentropy
+from tensorflow.keras.optimizers import Adam, AdamW
+from tensorflow.keras.activations import swish
+import tensorflow as tf
 
+model = Sequential()
+model.add(Input(shape=(224, 224, 3)))
+# Réduit le bruit et le nombre de paramètres drastiquement
+model.add(MaxPooling2D(pool_size=(4, 4))) 
+model.add(Flatten())
+
+# Layer 1
+model.add(Dense(512, kernel_initializer='lecun_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('swish')) 
+#model.add(Dropout(0.4)) 
+
+# Layer 2
+model.add(Dense(256, kernel_initializer='lecun_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('swish'))
+#model.add(Dropout(0.4))
+
+# Layer 3
+model.add(Dense(128, kernel_initializer='lecun_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('swish'))
+#model.add(Dropout(0.4))
+
+# Output
+model.add(Dense(len(categories)))
+model.add(Activation('softmax'))
+
+# Learning rate légèrement plus bas car SELU est très dynamique
+lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
+    initial_learning_rate=0.0005, 
+    decay_steps=40 * (len(anns_train) // 32)
+)
+
+model.compile(
+    optimizer=AdamW(learning_rate=lr_schedule, weight_decay=1e-4),
+    # Gamma plus fort pour récupérer les "Fishing Vessels" la ou recall plus bas 
+    loss=CategoricalFocalCrossentropy(alpha=0.25, gamma=3.0), 
+    metrics=['accuracy']
+)
+model.summary()
+```
+POOLING 4x4
+training:
+0.5871999859809875
+validation:
+
+Mean Accuracy: 52.107%
+Mean Recall: 44.971%
+Mean Precision: 52.036%
+
+POOLING 3x3
+Mean Accuracy: 51.787%
+Mean Recall: 44.783%
+Mean Precision: 51.821%
+
+
+- Exp 13
+Same but with ELU and he init 
+-> not working good  
 
 ## Melen
 
