@@ -11,11 +11,38 @@
 \usepackage{booktabs}
 \usepackage{graphicx}
 \usepackage{amsmath}
-\usepackage{listings} % For showing hyperparameter code snippets
+\usepackage{listings}
+\usepackage{xcolor}
+
+% --- Code Style Configuration ---
+\definecolor{codegreen}{rgb}{0,0.6,0}
+\definecolor{codegray}{rgb}{0.5,0.5,0.5}
+\definecolor{codepurple}{rgb}{0.58,0,0.82}
+\definecolor{backcolour}{rgb}{0.95,0.95,0.92}
+
+\lstdefinestyle{mystyle}{
+    backgroundcolor=\color{backcolour},   
+    commentstyle=\color{codegreen},
+    keywordstyle=\color{magenta},
+    numberstyle=\tiny\color{codegray},
+    stringstyle=\color{codepurple},
+    basicstyle=\ttfamily\scriptsize,
+    breakatwhitespace=false,         
+    breaklines=true,                 
+    captionpos=b,                    
+    keepspaces=true,                 
+    numbers=left,                    
+    numbersep=5pt,                  
+    showspaces=false,                
+    showstringspaces=false,
+    showtabs=false,                  
+    tabsize=2
+}
+\lstset{style=mystyle}
 
 % --- Metadata ---
 \title{Deep Learning: Image Recognition}
-\subtitle{Phase 1: Feed-Forward Neural Network Optimization}
+\subtitle{Phase 1: FFNN Architecture & Optimization}
 \author{Melen Laclais \and Léo Lamy \and Adrián García-Pozuelo Fornieles}
 \institute{\color{black}Universidad Politécnica de Madrid}
 \date{\today}
@@ -33,69 +60,213 @@
 	\end{frame}
 	
 	\section{Introduction}
-	\begin{frame}{Environment \& Initial Baseline}
-		\begin{columns}[T] % T aligns the columns at the top
-			
-			% Left Column: Infrastructure
+	\begin{frame}{Environment \& Best Results}
+		\begin{columns}[T]
+			% Left Column
 			\begin{column}{0.5\textwidth}
-				\begin{block}{Computing Environment}
+				\begin{block}{Context}
 					\begin{itemize}
-						\item \textbf{Platform:} Kaggle Kernel
-						\item \textbf{Hardware:} NVIDIA GPU P100
-						\item \textbf{Software:} TensorFlow / Keras
-						\item \textbf{Dataset:} xView Recognition
+						\item \textbf{Task:} Multi-class Image Classification
+						\item \textbf{Model:} Feed-Forward Neural Network (FFNN)
+						\item \textbf{Constraint:} No Convolutional Layers (CNN) allowed yet.
 					\end{itemize}
 				\end{block}
 			\end{column}
 			
-			% Right Column: Baseline Status
+			% Right Column: BEST PERFORMANCE
 			\begin{column}{0.5\textwidth}
-				\begin{alertblock}{Current Performance}
+				\begin{alertblock}{Best Performance Achieved (Exp 12)}
 					\begin{itemize}
-						\item \textbf{Status:} Unmodified Notebook
-						\item \textbf{Validation Acc:} $\approx 38\%$
-						\item \textbf{Observation:} Sub-optimal hyperparameters leading to poor convergence.
+						\item \textbf{Validation Accuracy:} $\mathbf{52.10\%}$
+						\item \textbf{Mean Recall:} $44.97\%$
+						\item \textbf{Mean Precision:} $52.03\%$
+						\item \textbf{Status:} Significant improvement over baseline (37\%) without using CNNs.
 					\end{itemize}
 				\end{alertblock}
 			\end{column}
-			
 		\end{columns}
-		
-		\vspace{0.5cm}
-		\begin{quote}
-			\textit{Goal: Improve accuracy through systematic architectural and parameter tuning.}
-		\end{quote}
 	\end{frame}
 	
-	\section{Analysis}
-	\begin{frame}{Current Notebook Limitations}
-	
+	\section{The Journey}
+	\begin{frame}{Evolution of Thought: The Parameter Wall}
+		\textbf{Problem Encountered (Exp 3):}
+		\begin{itemize}
+			\item Input images are $224 \times 224 \times 3$ pixels.
+			\item Flattening implies $\approx 150,528$ input neurons.
+			\item A simple dense layer resulted in \textbf{154 Million parameters}.
+		\end{itemize}
+		\vspace{0.2cm}
+		\textbf{Consequence:}
+		\begin{itemize}
+			\item The model was too heavy for the optimizer.
+			\item Massive overfitting and inability to converge on validation data.
+			\item \textit{Diagnosis:} We needed to summarize information before the dense layers.
+		\end{itemize}
 	\end{frame}
-	
-	\section{Strategy}
-	\begin{frame}{Proposed Improvements}
 
+	\begin{frame}{Evolution of Thought: The Solution}
+		\textbf{Step 1: Dimensionality Reduction (Exp 4 \& 5)}
+		\begin{itemize}
+			\item We tested AveragePooling and MaxPooling.
+			\item \textbf{Decision:} \texttt{MaxPooling2D (4x4)}.
+			\item \textbf{Result:} Reduced input size by factor of 16, allowing the model to focus on dominant features rather than pixel noise.
+		\end{itemize}
+		
+		\vspace{0.2cm}
+		\textbf{Step 2: The "Funnel" Architecture}
+		\begin{itemize}
+			\item Instead of constant layer sizes, we adopted a structure: $512 \to 256 \to 128$.
+			\item This forces the network to compress features into higher-level concepts progressively.
+		\end{itemize}
 	\end{frame}
 	
-	\section{Optimization and Results}
-	\begin{frame}{Step 1: Tuning the Optimizer}
+	\section{Architecture Choices}
+	\begin{frame}{Justification of Architectural Choices}
+		\begin{table}[]
+			\tiny
+			\centering
+			\begin{tabular}{@{}llp{5cm}@{}}
+				\toprule
+				\textbf{Parameter} & \textbf{Choice} & \textbf{Justification} \\ \midrule
+				\textbf{Pooling} & MaxPool (4x4) & Drastically reduces params (150M $\to$ Manageable) and filters noise. \\ \midrule
+				\textbf{Epochs} & 42 & Observation of the loss curve showed a plateau around epoch 40. \\ \midrule
+				\textbf{Batch Size} & 32 & Best trade-off found between training speed and gradient stability. \\ \midrule
+				\textbf{Activation} & Swish & Performs better than ReLU on deep networks (smooth non-monotonicity). \\ \midrule
+				\textbf{Initialization} & LeCun Normal & Matches the variance requirements of the Swish/SELU activation family. \\ \midrule
+				\textbf{Optimizer} & AdamW & Decoupled Weight Decay ($1e^{-4}$) helps generalization better than standard Adam. \\ \midrule
+				\textbf{Scheduler} & CosineDecay & Dynamic learning rate prevents getting stuck in local minima early on. \\ \bottomrule
+			\end{tabular}
+		\end{table}
+	\end{frame}
 
+	\section{Best Architecture}
+	\begin{frame}[fragile]{Best Architecture Code (Exp 12)}
+\begin{lstlisting}[language=Python]
+# Input: 224x224 RGB Images
+model = Sequential()
+model.add(Input(shape=(224, 224, 3)))
+
+# 1. Dimensionality Reduction (The Key Step)
+model.add(MaxPooling2D(pool_size=(4, 4))) 
+model.add(Flatten())
+
+# 2. Funnel Structure (Compression)
+# Layer 1
+model.add(Dense(512, kernel_initializer='lecun_normal')) 
+model.add(Activation('swish')) 
+
+# Layer 2
+model.add(Dense(256, kernel_initializer='lecun_normal')) 
+model.add(Activation('swish'))
+
+# Layer 3
+model.add(Dense(128, kernel_initializer='lecun_normal')) 
+model.add(Activation('swish'))
+
+# 3. Output
+model.add(Dense(len(categories)))
+model.add(Activation('softmax'))
+\end{lstlisting}
+	\end{frame}
+
+    \section{Architectures Tried}
+	
+	% --- Slide 1: The Parameter Explosion ---
+	\begin{frame}{Failed Architectures: The Parameter Wall}
+		\small % Réduit la taille du texte pour cette slide
+		\textbf{Experiment 3: The Massive Dense Network}
+		\vspace{0.2cm}
+		
+		\begin{columns}[T]
+			\begin{column}{0.48\textwidth}
+				\begin{block}{The Structure}
+					\begin{itemize}
+						\item \textbf{Input:} Raw Pixels ($224 \times 224 \times 3$).
+						\item \textbf{Layers:} $1024 \to 512$ (No Pooling).
+						\item \textbf{Goal:} Capture all details without compression.
+					\end{itemize}
+				\end{block}
+			\end{column}
+			
+			\begin{column}{0.48\textwidth}
+				\begin{alertblock}{The Failure}
+					\begin{itemize}
+						\item \textbf{Params:} \textbf{154 Million} (Explosion).
+						\item \textbf{Acc:} $\approx 20\%$ (Random guess).
+						\item \textbf{Why?} The optimizer could not navigate such a vast search space. Immediate divergence.
+					\end{itemize}
+				\end{alertblock}
+			\end{column}
+		\end{columns}
+	\end{frame}
+
+	% --- Slide 2: The Noise Problem ---
+	\begin{frame}{Failed Architectures: The Noise Problem}
+		\small
+		\textbf{Experiment 5: Insufficient Pooling}
+		\vspace{0.2cm}
+		
+		\begin{block}{The Hypothesis}
+			We tried \texttt{MaxPooling(2,2)} instead of $(4,4)$ to keep more resolution for small objects.
+		\end{block}
+		
+		\vspace{0.3cm}
+		
+		\begin{alertblock}{The Result: Unstable (34\% Acc)}
+			\begin{itemize}
+				\item \textbf{Parameter Count:} Still too high ($\approx 39$ Million).
+				\item \textbf{Signal-to-Noise Ratio:} The network was overwhelmed by high-frequency pixel noise.
+				\item \textbf{Conclusion:} A $4\times4$ pooling is mandatory to filter noise before the dense layers.
+			\end{itemize}
+		\end{alertblock}
+	\end{frame}
+
+	% --- Slide 3: Dynamics & Compression ---
+	\begin{frame}{Failed Architectures: Optimization Logic}
+		\footnotesize % Encore un peu plus petit pour faire tenir deux blocs distincts
+		
+		\textbf{1. Self-Normalizing Networks (Exp 11)}
+		\begin{itemize}
+			\item \textbf{Try:} SELU activation + LeCun Normal initialization.
+			\item \textbf{Result:} \textbf{24\% Accuracy (Failed).}
+			\item \textbf{Reason:} SELU is extremely sensitive to outliers. Without a perfect distribution, the gradients vanished or exploded.
+		\end{itemize}
+		\vspace{0.3cm}
+		\hrule
+		\vspace{0.3cm}
+		
+		\textbf{2. Aggressive Bottleneck (Exp 14)}
+		\begin{itemize}
+			\item \textbf{Try:} Rapid compression ($256 \to 64$ neurons).
+			\item \textbf{Result:} \textbf{48\% Accuracy (Regression).}
+			\item \textbf{Reason:} The "funnel" was too steep. Essential features for distinguishing similar classes (e.g., \textit{Small Car} vs \textit{Truck}) were lost in the compression.
+		\end{itemize}
 	\end{frame}
 	
-	\begin{frame}{Step 2: X...}
+	\section{Future Work}
+	\begin{frame}{Next Steps: Regularization \& Robustness}
+		Although we reached 52\% accuracy, we observe signs of overfitting (Train > Val). The next phase will focus on:
 		
-	\end{frame}
-	
-	\begin{frame}{Step 3: X...}
+		\begin{enumerate}
+			\item \textbf{Batch Normalization:} 
+			\begin{itemize}
+				\item To stabilize the learning process and allow higher learning rates.
+			\end{itemize}
+			
+			\item \textbf{Dropout:} 
+			\begin{itemize}
+				\item To randomly deactivate neurons and force the network to learn more robust features (prevent memorization).
+			\end{itemize}
+			
+			\item \textbf{Data Augmentation:} 
+			\begin{itemize}
+				\item \textit{Problem:} Recall is low on small objects (Trucks, Fishing Vessels).
+				\item \textit{Solution:} Rotations, Zooms, and Flips to artificially increase the dataset for these difficult classes.
+			\end{itemize}
+		\end{enumerate}
 		
-	\end{frame}
-	
-	\begin{frame}{Step 4: X...}
-		
-	\end{frame}
-	
-	\begin{frame}{Conclusion}
-		
+		\vspace{0.3cm}
+		\textbf{Target:} Aiming for $>60\%$ accuracy and improved recall on minority classes.
 	\end{frame}
 	
 \end{document}
