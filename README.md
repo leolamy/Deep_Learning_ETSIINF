@@ -326,7 +326,19 @@ Same but with ELU and he init
 -> not working good  
 
 ## Melen
+### EXPERIMENT 1 - file: basic_ffnn_exp1_melen.ipynb
+#### changes : default, without changing the template
+#### Results : 
+Mean Accuracy: 37.013%
+Mean Recall: 24.446%
+Mean Precision: 30.915%
 
+### EXPERIMENT 2 - file: ffnn_exp2_melen.ipynb
+#### changes : add Normalization for 255 in pixels to have between 0 and 1 to anticipate Explosion Gradients and a stratify(labels) in train_test_split to maintain class proportions in both sets, ensuring more reliable validation metrics given dataset imbalance.
+#### Results : 
+Mean Accuracy: 39.093%
+Mean Recall: 27.869%
+Mean Precision: 33.115%
 
 ## Adrian
 
