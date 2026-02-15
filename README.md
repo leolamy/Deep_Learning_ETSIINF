@@ -322,8 +322,104 @@ Mean Precision: 51.821%
 
 
 - Exp 13
-Same but with ELU and he init 
--> not working good  
+```python
+model = Sequential()
+model.add(Input(shape=(224, 224, 3)))
+model.add(MaxPooling2D(pool_size=(4, 4)))
+model.add(Flatten())
+
+# Layer 1
+model.add(Dense(384, kernel_initializer='he_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('swish')) 
+#model.add(Dropout(0.4)) 
+
+# Layer 2
+model.add(Dense(192, kernel_initializer='he_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('swish'))
+#model.add(Dropout(0.4))
+
+# Layer 3
+model.add(Dense(96, kernel_initializer='he_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('swish'))
+#model.add(Dropout(0.4))
+
+# Output
+model.add(Dense(len(categories)))
+model.add(Activation('softmax'))
+
+lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
+    initial_learning_rate=0.001, 
+    decay_steps=50 * (len(anns_train) // 32)
+)
+
+model.compile(
+    optimizer=AdamW(learning_rate=lr_schedule, weight_decay=0.001), 
+    loss=CategoricalFocalCrossentropy(alpha=0.25, gamma=2.5), 
+    metrics=['accuracy']
+)
+```
+Mean Accuracy: 50.187%
+
+Mean Recall: 42.737%
+
+Mean Precision: 51.096%
+
+
+- Exp 14
+```python
+model = Sequential()
+model.add(Input(shape=(224, 224, 3)))
+
+# On garde le Pooling 4x4 qui marche bien
+model.add(MaxPooling2D(pool_size=(4, 4))) 
+model.add(Flatten())
+
+# Layer 1 : On réduit encore (256 suffisent largement après un pooling 4x4)
+model.add(Dense(256, kernel_initializer='he_normal')) 
+model.add(Activation('swish')) 
+
+# Layer 2 : Le goulot d'étranglement (Bottleneck)
+# Force le modèle à résumer l'image en seulement 64 concepts
+model.add(Dense(64, kernel_initializer='he_normal'))
+model.add(Activation('swish'))
+
+# Output Directement après (Pas de 3ème couche cachée inutile)
+model.add(Dense(len(categories)))
+model.add(Activation('softmax'))
+
+# Scheduler
+lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
+    initial_learning_rate=0.001, 
+    decay_steps=50 * (len(anns_train) // 32)
+)
+
+model.compile(
+    # Weight Decay agressif (0.005) pour tuer l'overfitting
+    optimizer=AdamW(learning_rate=lr_schedule, weight_decay=0.005),
+    loss=CategoricalFocalCrossentropy(alpha=0.25, gamma=2.0), 
+    metrics=['accuracy']
+)
+```
+Mean Accuracy: 48.107%
+
+Mean Recall: 44.672%
+
+Mean Precision: 50.883%
+
+- EXP 15  - ffnn-exp15-leo
+With Melen improvement on the images 
+Mean Accuracy: 52.373%
+Mean Recall: 44.558%
+Mean Precision: 54.660%
+
+- EXO 15 - ffnn-exp15bis-leo 
+Resizing instead of pooling 
+Mean Accuracy: 52.907%
+Mean Recall: 44.815%
+Mean Precision: 52.024%
 
 ## Melen
 ### EXPERIMENT 1 - file: basic_ffnn_exp1_melen.ipynb
