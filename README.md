@@ -421,6 +421,77 @@ Mean Accuracy: 52.907%
 Mean Recall: 44.815%
 Mean Precision: 52.024%
 
+- EXP 16 - ffnn_exp16_leo
+bicubic sizing 56x56 images 
+```python
+# Load architecture
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.layers import Dense, Activation, Flatten, Input
+from tensorflow.keras.losses import CategoricalFocalCrossentropy
+from tensorflow.keras.optimizers import Nadam 
+import tensorflow as tf
+
+model = Sequential()
+model.add(Input(shape=(56, 56, 3)))
+model.add(Flatten())
+
+# Layer 1
+model.add(Dense(1024, kernel_initializer='lecun_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('selu')) 
+#model.add(Dropout(0.4)) 
+
+# Layer 2
+model.add(Dense(512, kernel_initializer='lecun_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('selu')) 
+#model.add(Dropout(0.4)) 
+
+# Layer 3
+model.add(Dense(256, kernel_initializer='lecun_normal')) 
+#model.add(BatchNormalization())
+model.add(Activation('selu')) 
+#model.add(Dropout(0.4)) 
+
+# Output
+model.add(Dense(len(categories)))
+model.add(Activation('softmax'))
+
+# Learning rate légèrement plus bas car SELU est très dynamique
+lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
+    initial_learning_rate=0.001,
+    decay_steps=40 * (len(anns_train) // 32)
+)
+
+model.compile(
+    optimizer=Nadam(learning_rate=lr_schedule), # Adam with nesterov momentum 
+    loss=CategoricalFocalCrossentropy(), 
+    metrics=['accuracy']
+)
+model.summary()
+```
+```python
+    # Load image
+                img = load_geoimage(filename)
+                # Convertir en tenseur Tensorflow pour le traitement
+                img_tensor = tf.convert_to_tensor(img)
+                # Convertir en float32 et normaliser entre 0 et 1
+                img_tensor = tf.image.convert_image_dtype(img_tensor, tf.float32)
+                # Redimensionnement via bicubic (+ précis)
+                img_resized = tf.image.resize(img_tensor, [56, 56], method='bicubic')
+                # On repasse en Numpy pour construire le batch
+                images.append(img_resized.numpy())                
+                probabilities = np.zeros(len(categories))
+                probabilities[list(categories.values()).index(obj.category)] = 1
+                labels.append(probabilities)
+```
+Results : 
+Mean Accuracy: 59.467%
+Mean Recall: 53.411%
+Mean Precision: 56.207%``
+
+To address the curse of dimensionality inherent to dense architectures, we implemented a unified preprocessing pipeline that downsamples all inputs to $56 \times 56$ using bicubic interpolation, ensuring that essential spatial features are preserved while maintaining a manageable parameter count for both training and inference.
+
 ## Melen
 ### EXPERIMENT 1 - file: basic_ffnn_exp1_melen.ipynb
 #### changes : default, without changing the template
