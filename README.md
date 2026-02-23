@@ -1155,13 +1155,267 @@ accuracy: 0.1409 - loss: 260.0886 - val_accuracy: 0.1925 - val_loss: 2.3251 - le
 
 # REGs (2nd report)
 ## Léo
-### EXPERIMENT 1
+### EXPERIMENT 1 - ffNN-exp2.1-leo
 #### Hyperparameters : 
+2 layers 1024x1024
+batchnorm
+dropout(0.3)
+resized 64x64
+data aug: random flip horizontal and vertical
+Nadam lr 0.001 wd 1.e-5
+batch_size = 128
+epoch 100 early stopping 12
 #### Results : 
+Mean Accuracy: 61.013%
+Mean Recall: 55.195%
+Mean Precision: 56.030%
 
-### EXPERIMENT 2
+struggle on little objects (0% hellipad)
+
+### EXPERIMENT 2 - ffnn_exp2.2_leo.ipynb
 #### Hyperparameters : 
+3 layers 512 (d=0.4)-> 512(d=0.3) -> 256(d=0.2)
+swish + he + kernel_regularizer (reduce overfitting via weights)
+balance classed weights (cellule avant modèle)
+AdamW (lr = 0.0005, weight_decay=1e-3)
+categorical crossentropy
+early stop on val_loss patience = 8
 #### Results : 
+naze
+
+### EXP 3 - ffnn_exp2.3_leo.ipynb
+#### Results
+Mean Accuracy: 61.707%
+Mean Recall: 56.036%
+Mean Precision: 57.577%
+Struggle on little objects too -> class_weight
+
+### EXP 4 -- ffnn_exp2.4_leo.ipynb
+Balanced class 
+balance alpha on focal loss (normalized about the classes)
+#### Resultats
+Mean Accuracy: 52.907%
+Mean Recall: 60.006%
+Mean Precision: 48.708%
+> Cargo plane: Recall: 90.625% Precision: 69.048% Specificity: 98.564% Dice: 78.378%
+> Small car: Recall: 60.843% Precision: 74.539% Specificity: 95.528% Dice: 66.998%
+> Bus: Recall: 53.107% Precision: 44.340% Specificity: 93.051% Dice: 48.329%
+> Truck: Recall: 15.385% Precision: 41.463% Specificity: 97.098% Dice: 22.442%
+> Motorboat: Recall: 70.093% Precision: 51.724% Specificity: 96.041% Dice: 59.524%
+> Fishing vessel: Recall: 66.197% Precision: 35.606% Specificity: 95.288% Dice: 46.305%
+> Dump truck: Recall: 57.258% Precision: 41.279% Specificity: 94.232% Dice: 47.973%
+> Excavator: Recall: 68.354% Precision: 47.788% Specificity: 96.715% Dice: 56.250%
+> Building: Recall: 43.454% Precision: 75.362% Specificity: 96.636% Dice: 55.124%
+> Helipad: Recall: 63.636% Precision: 12.281% Specificity: 97.318% Dice: 20.588%
+> Storage tank: Recall: 56.463% Precision: 51.553% Specificity: 95.486% Dice: 53.896%
+> Shipping container: Recall: 57.237% Precision: 48.876% Specificity: 94.719% Dice: 52.727%
+> Pylon: Recall: 77.419% Precision: 39.344% Specificity: 97.993% Dice: 52.174%
+
+-> better resultats on Hellipad but bad precision 
+
+### EXP5 -- ffnn_exp2.5_leo.ipynb
+lanczos3 instead of bicubic 
+bbox -> a expliquer 
+resize 64x64
+#### Results :
+Mean Accuracy: 59.840%
+Mean Recall: 60.219%
+Mean Precision: 55.644%
+> Cargo plane: Recall: 92.188% Precision: 85.507% Specificity: 99.448% Dice: 88.722%
+> Small car: Recall: 73.193% Precision: 73.414% Specificity: 94.297% Dice: 73.303%
+> Bus: Recall: 54.237% Precision: 50.526% Specificity: 94.464% Dice: 52.316%
+> Truck: Recall: 22.172% Precision: 36.029% Specificity: 94.740% Dice: 27.451%
+> Motorboat: Recall: 77.570% Precision: 56.081% Specificity: 96.324% Dice: 65.098%
+> Fishing vessel: Recall: 66.197% Precision: 47.475% Specificity: 97.118% Dice: 55.294%
+> Dump truck: Recall: 54.839% Precision: 53.968% Specificity: 96.688% Dice: 54.400%
+> Excavator: Recall: 68.354% Precision: 57.447% Specificity: 97.773% Dice: 62.428%
+> Building: Recall: 62.117% Precision: 69.470% Specificity: 93.536% Dice: 65.588%
+> Helipad: Recall: 18.182% Precision: 25.000% Specificity: 99.678% Dice: 21.053%
+> Storage tank: Recall: 57.823% Precision: 59.028% Specificity: 96.586% Dice: 58.419%
+> Shipping container: Recall: 58.553% Precision: 53.614% Specificity: 95.531% Dice: 55.975%
+> Pylon: Recall: 77.419% Precision: 55.814% Specificity: 98.970% Dice: 64.865%
+
+### EXP6 -- ffnn_exp2.6_leo.ipynb 
+passage en 128x128
+rajoute 3e couche 512 neurons
+crop sur la bbox -> garder taille importante des objets (remplissage des 128 pixels pour mieux distinguer les shapes, ne garder que la shape)
+Le fallback if crop.shape[0] == 0 protège contre les bboxes dégénérées (coordonnées identiques ou hors image).
+normalisation -1/1 -> plus stable pour la descente de gradient
+oversampling faibles classes (pylon et helipad)
+use_bias=True
+steps_per_epoch recalculé pour refléter l'oversampling -> savoir le nombre de step par epoch pour vraiment TOUT parcourir par epoch 
+#### results
+Mean Accuracy: 57.280%
+Mean Recall: 58.991%
+Mean Precision: 53.117%
+> Cargo plane: Recall: 87.500% Precision: 86.154% Specificity: 99.503% Dice: 86.822%
+> Small car: Recall: 71.386% Precision: 72.477% Specificity: 94.167% Dice: 71.927%
+> Bus: Recall: 53.107% Precision: 45.192% Specificity: 93.286% Dice: 48.831%
+> Truck: Recall: 19.005% Precision: 38.182% Specificity: 95.889% Dice: 25.378%
+> Motorboat: Recall: 65.421% Precision: 56.452% Specificity: 96.946% Dice: 60.606%
+> Fishing vessel: Recall: 61.972% Precision: 46.316% Specificity: 97.173% Dice: 53.012%
+> Dump truck: Recall: 54.032% Precision: 46.528% Specificity: 95.603% Dice: 50.000%
+> Excavator: Recall: 67.089% Precision: 53.535% Specificity: 97.439% Dice: 59.551%
+> Building: Recall: 60.724% Precision: 66.871% Specificity: 92.876% Dice: 63.650%
+> Helipad: Recall: 36.364% Precision: 25.000% Specificity: 99.356% Dice: 29.630%
+> Storage tank: Recall: 53.061% Precision: 56.934% Specificity: 96.586% Dice: 54.930%
+> Shipping container: Recall: 56.579% Precision: 50.588% Specificity: 95.125% Dice: 53.416%
+> Pylon: Recall: 80.645% Precision: 46.296% Specificity: 98.427% Dice: 58.824%
+
+### EXP7 -- ffnn_exp2.7_leo.ipynb 
+retour en 64x64
+retour sur 2 layers
+normalisation 0/1 marche mieux
+archi 2.5 avec crop et oversampling petites class
+
+Mean Accuracy: 59.680%
+Mean Recall: 62.484%
+Mean Precision: 56.194%
+> Cargo plane: Recall: 87.500% Precision: 86.154% Specificity: 99.503% Dice: 86.822%
+> Small car: Recall: 78.012% Precision: 69.251% Specificity: 92.547% Dice: 73.371%
+> Bus: Recall: 52.542% Precision: 47.449% Specificity: 93.934% Dice: 49.866%
+> Truck: Recall: 19.005% Precision: 38.182% Specificity: 95.889% Dice: 25.378%
+> Motorboat: Recall: 68.224% Precision: 59.836% Specificity: 97.229% Dice: 63.755%
+> Fishing vessel: Recall: 67.606% Precision: 53.933% Specificity: 97.727% Dice: 60.000%
+> Dump truck: Recall: 55.645% Precision: 48.592% Specificity: 95.831% Dice: 51.880%
+> Excavator: Recall: 69.620% Precision: 59.140% Specificity: 97.884% Dice: 63.953%
+> Building: Recall: 59.889% Precision: 70.957% Specificity: 94.195% Dice: 64.955%
+> Helipad: Recall: 54.545% Precision: 35.294% Specificity: 99.410% Dice: 42.857%
+> Storage tank: Recall: 59.184% Precision: 58.389% Specificity: 96.412% Dice: 58.784%
+> Shipping container: Recall: 59.868% Precision: 56.173% Specificity: 95.879% Dice: 57.962%
+> Pylon: Recall: 80.645% Precision: 47.170% Specificity: 98.482% Dice: 59.524%
+
+### EXP8 - ffnn_exp2.8_leo.ipynb
+bad resulst
+
+### EXP9  - ffn_exp2.9_NewArchi
+New archi -> dense layers (residual connections, skip connection) w 10 total layers 1024->512->256 + out
+-> BEST RESULTS SO FAR
+Mean Accuracy: 61.333%
+Mean Recall: 60.950%
+Mean Precision: 62.735%
+> Cargo plane: Recall: 89.062% Precision: 89.062% Specificity: 99.613% Dice: 89.062%
+> Small car: Recall: 73.193% Precision: 73.414% Specificity: 94.297% Dice: 73.303%
+> Bus: Recall: 50.847% Precision: 42.654% Specificity: 92.874% Dice: 46.392%
+> Truck: Recall: 28.507% Precision: 31.343% Specificity: 91.657% Dice: 29.858%
+> Motorboat: Recall: 66.355% Precision: 64.545% Specificity: 97.794% Dice: 65.438%
+> Fishing vessel: Recall: 57.746% Precision: 58.571% Specificity: 98.392% Dice: 58.156%
+> Dump truck: Recall: 59.677% Precision: 56.489% Specificity: 96.745% Dice: 58.039%
+> Excavator: Recall: 70.886% Precision: 70.886% Specificity: 98.719% Dice: 70.886%
+> Building: Recall: 68.245% Precision: 69.405% Specificity: 92.876% Dice: 68.820%
+> Helipad: Recall: 36.364% Precision: 50.000% Specificity: 99.785% Dice: 42.105%
+> Storage tank: Recall: 61.224% Precision: 69.767% Specificity: 97.743% Dice: 65.217%
+> Shipping container: Recall: 62.500% Precision: 58.642% Specificity: 96.111% Dice: 60.510%
+> Pylon: Recall: 67.742% Precision: 80.769% Specificity: 99.729% Dice: 73.684%
+
+### EXP10  - ffn_exp2.10_NewArchi
+same archi - 2 layers 1024
+-> collapsed
+
+### EXP11 - ffnn_exp2.11
+
+### EXP12 - ffnn_exp2.12
+dense layer 96x96 resize
+Mean Accuracy: 62.055%
+Mean Recall: 64.230%
+Mean Precision: 66.044%
+> Cargo plane: Recall: 83.158% Precision: 86.813% Specificity: 99.558% Dice: 84.946%
+> Small car: Recall: 76.353% Precision: 68.036% Specificity: 92.261% Dice: 71.955%
+> Bus: Recall: 51.698% Precision: 47.902% Specificity: 94.150% Dice: 49.728%
+> Truck: Recall: 27.108% Precision: 31.469% Specificity: 92.097% Dice: 29.126%
+> Motorboat: Recall: 70.000% Precision: 68.293% Specificity: 98.039% Dice: 69.136%
+> Fishing vessel: Recall: 60.377% Precision: 66.667% Specificity: 98.817% Dice: 63.366%
+> Dump truck: Recall: 50.270% Precision: 53.757% Specificity: 96.955% Dice: 51.955%
+> Excavator: Recall: 73.729% Precision: 66.923% Specificity: 98.404% Dice: 70.161%
+> Building: Recall: 68.460% Precision: 69.101% Specificity: 92.741% Dice: 68.779%
+> Helipad: Recall: 64.706% Precision: 84.615% Specificity: 99.928% Dice: 73.333%
+> Storage tank: Recall: 65.455% Precision: 72.362% Specificity: 97.878% Dice: 68.735%
+> Shipping container: Recall: 60.699% Precision: 59.657% Specificity: 96.361% Dice: 60.173%
+> Pylon: Recall: 82.979% Precision: 82.979% Specificity: 99.711% Dice: 82.979%
+
+Bloc 1 (1024) : 3 Dense  →  couches 1, 2, 3
+Bloc 2 (1024) : 3 Dense  →  couches 4, 5, 6
+Bloc 3 (512)  : 3 Dense  →  couches 7, 8, 9
+Bloc 4 (256)  : 3 Dense  →  couches 10, 11, 12
+Sortie        : 1 Dense  →  couche 13
+
+### EXP 13 - ffnn_exp2.13
+reduce gamma of focal loss and up dropout and lr to reduce precision and up accuracy
+
+Mean Accuracy: 61.202%
+Mean Recall: 63.006%
+Mean Precision: 65.410%
+> Cargo plane: Recall: 82.105% Precision: 87.640% Specificity: 99.595% Dice: 84.783%
+> Small car: Recall: 74.749% Precision: 69.460% Specificity: 92.910% Dice: 72.008%
+> Bus: Recall: 49.434% Precision: 45.486% Specificity: 93.836% Dice: 47.378%
+> Truck: Recall: 28.313% Precision: 32.192% Specificity: 92.016% Dice: 30.128%
+> Motorboat: Recall: 60.625% Precision: 60.248% Specificity: 97.587% Dice: 60.436%
+> Fishing vessel: Recall: 60.377% Precision: 65.306% Specificity: 98.744% Dice: 62.745%
+> Dump truck: Recall: 50.270% Precision: 51.381% Specificity: 96.650% Dice: 50.820%
+> Excavator: Recall: 72.034% Precision: 72.650% Specificity: 98.812% Dice: 72.340%
+> Building: Recall: 70.872% Precision: 66.090% Specificity: 91.377% Dice: 68.397%
+> Helipad: Recall: 70.588% Precision: 85.714% Specificity: 99.928% Dice: 77.419%
+> Storage tank: Recall: 65.909% Precision: 71.782% Specificity: 97.801% Dice: 68.720%
+> Shipping container: Recall: 57.205% Precision: 62.381% Specificity: 96.942% Dice: 59.681%
+> Pylon: Recall: 76.596% Precision: 80.000% Specificity: 99.675% Dice: 78.261%
+less good layers
+### EXP14 - ffnn_exp2.14
+reduce nb of layers and neurons -> too much parameters : curse of dimensionality / overfitting / vanishing gradient + unique projection layers
+```python
+from tensorflow.keras.layers import Dense, BatchNormalization, Activation, Dropout, Flatten, Input, Add
+from tensorflow.keras.models import Model
+import tensorflow as tf
+
+def dense_residual_block(x, units, dropout_rate=0.15):
+    shortcut = Dense(units, use_bias=False)(x)
+    shortcut = BatchNormalization()(shortcut)
+
+    out = Dense(units, use_bias=False)(x)
+    out = BatchNormalization()(out)
+    out = Activation('swish')(out)
+    out = Dropout(dropout_rate)(out)
+    out = Dense(units, use_bias=False)(out)
+    out = BatchNormalization()(out)
+
+    out = Add()([out, shortcut])
+    out = Activation('swish')(out)
+    return out
+
+inputs = Input(shape=(96, 96, 3))
+x = tf.keras.layers.RandomFlip("horizontal_and_vertical")(inputs)
+x = tf.keras.layers.RandomRotation(0.25)(x)
+x = Flatten()(x)  # 27648
+
+x = Dense(512, use_bias=False)(x)   # 27648×512 = 14.2M
+x = BatchNormalization()(x)
+x = Activation('swish')(x)
+x = Dropout(0.15)(x)
+
+# Blocs résiduels dans l'espace compressé
+x = dense_residual_block(x, 512, dropout_rate=0.15)  # 512×512×3 = 0.79M
+x = dense_residual_block(x, 256, dropout_rate=0.15)  # 512×256+256×256 = 0.2M
+
+outputs = Dense(len(categories), activation='softmax')(x)
+model = Model(inputs=inputs, outputs=outputs)
+model.summary()
+```
+
+Mean Accuracy: 61.735%
+Mean Recall: 61.621%
+Mean Precision: 66.741%
+> Cargo plane: Recall: 82.105% Precision: 91.765% Specificity: 99.742% Dice: 86.667%
+> Small car: Recall: 74.950% Precision: 70.169% Specificity: 93.126% Dice: 72.481%
+> Bus: Recall: 54.340% Precision: 46.602% Specificity: 93.522% Dice: 50.174%
+> Truck: Recall: 27.108% Precision: 33.333% Specificity: 92.742% Dice: 29.900%
+> Motorboat: Recall: 63.125% Precision: 70.139% Specificity: 98.379% Dice: 66.447%
+> Fishing vessel: Recall: 53.774% Precision: 67.059% Specificity: 98.965% Dice: 59.686%
+> Dump truck: Recall: 50.811% Precision: 48.958% Specificity: 96.270% Dice: 49.867%
+> Excavator: Recall: 71.186% Precision: 65.625% Specificity: 98.367% Dice: 68.293%
+> Building: Recall: 74.397% Precision: 66.501% Specificity: 91.113% Dice: 70.228%
+> Helipad: Recall: 58.824% Precision: 90.909% Specificity: 99.964% Dice: 71.429%
+> Storage tank: Recall: 59.545% Precision: 76.163% Specificity: 98.418% Dice: 66.837%
+> Shipping container: Recall: 60.699% Precision: 57.917% Specificity: 96.090% Dice: 59.275%
+> Pylon: Recall: 70.213% Precision: 82.500% Specificity: 99.747% Dice: 75.862%
 
 ## Melen
 
