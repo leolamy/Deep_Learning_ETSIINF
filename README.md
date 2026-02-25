@@ -1417,6 +1417,116 @@ Mean Precision: 66.741%
 > Shipping container: Recall: 60.699% Precision: 57.917% Specificity: 96.090% Dice: 59.275%
 > Pylon: Recall: 70.213% Precision: 82.500% Specificity: 99.747% Dice: 75.862%
 
+
+### EXP 15 - 16 - 17 - 18 
+trying to improve results with different neurons -> 2.12 still best 
+
+### 19 
+adding crop to the image to have same results test and validation
+2.12 still best
+
+
+### 2-21
+Best one by far 
+starting from the best 1 from 1st report 
+```python
+import numpy as np
+import tensorflow as tf
+from skimage.feature import hog
+from tensorflow.keras.models import Model
+from tensorflow.keras.layers import Input, RandomFlip, GaussianNoise, Flatten, Dense, BatchNormalization, Activation, Dropout, Add, Concatenate
+from tensorflow.keras.losses import CategoricalFocalCrossentropy
+from tensorflow.keras.optimizers import Nadam
+
+# Extraction HOG
+def get_hog_features(images):
+    return np.array([hog(img, pixels_per_cell=(8, 8), cells_per_block=(2, 2), channel_axis=-1) for img in images])
+
+# Construction du modèle 
+def create_model(hog_feature_size):
+    # Branche Image
+    img_input = Input(shape=(32, 32, 3), name="img_input")
+    x_img = RandomFlip("horizontal_and_vertical")(img_input)
+    x_img = GaussianNoise(0.1)(x_img)
+    x_img = Flatten()(x_img)
+    
+    # Branche HOG
+    hog_input = Input(shape=(hog_feature_size,), name="hog_input")
+    
+    # Fusion
+    x = Concatenate()([x_img, hog_input])
+
+    # Bloc 1
+    x = Dense(1024, kernel_initializer='he_normal')(x)
+    x = BatchNormalization()(x)
+    x = Activation('swish')(x)
+    block_1 = Dropout(0.2)(x)
+
+    # Bloc 2
+    x = Dense(1024, kernel_initializer='he_normal')(block_1)
+    x = BatchNormalization()(x)
+    x = Activation('swish')(x)
+    block_2 = Dropout(0.1)(x)
+
+    # Skip connection (addition des deux blocs)
+    added = Add()([block_1, block_2])
+
+    # Bloc 3
+    x = Dense(256, kernel_initializer='he_normal')(added)
+    x = BatchNormalization()(x)
+    x = Activation('swish')(x)
+    x = Dropout(0.1)(x)
+
+    outputs = Dense(len(categories), activation='softmax')(x)
+
+    model = Model(inputs=[img_input, hog_input], outputs=outputs)
+    
+    lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
+        initial_learning_rate=0.0005,
+        decay_steps=100 * (len(anns_train) // 32)
+    )
+
+    model.compile(
+        optimizer=Nadam(learning_rate=lr_schedule, weight_decay=1e-4),
+        loss=CategoricalFocalCrossentropy(alpha=0.25, gamma=2.0),
+        metrics=['accuracy']
+    )
+    return model
+
+# Initialisation de l'Ensemble
+n_models = 3
+models = [create_model(hog_feature_size=324) for _ in range(n_models)]
+```
+Mean Accuracy: 66.536%
+Mean Recall: 69.221%
+Mean Precision: 67.646%
+> Cargo plane: Recall: 87.368% Precision: 95.402% Specificity: 99.853% Dice: 91.209%
+> Small car: Recall: 75.952% Precision: 76.258% Specificity: 94.898% Dice: 76.104%
+> Bus: Recall: 49.811% Precision: 55.696% Specificity: 95.878% Dice: 52.590%
+> Truck: Recall: 35.241% Precision: 33.815% Specificity: 90.766% Dice: 34.513%
+> Motorboat: Recall: 69.375% Precision: 64.912% Specificity: 97.738% Dice: 67.069%
+> Fishing vessel: Recall: 75.472% Precision: 57.143% Specificity: 97.783% Dice: 65.041%
+> Dump truck: Recall: 57.297% Precision: 52.736% Specificity: 96.384% Dice: 54.922%
+> Excavator: Recall: 74.576% Precision: 66.165% Specificity: 98.330% Dice: 70.120%
+> Building: Recall: 75.139% Precision: 81.325% Specificity: 95.908% Dice: 78.110%
+> Helipad: Recall: 76.471% Precision: 72.222% Specificity: 99.821% Dice: 74.286%
+> Storage tank: Recall: 76.818% Precision: 81.643% Specificity: 98.534% Dice: 79.157%
+> Shipping container: Recall: 65.502% Precision: 66.079% Specificity: 97.019% Dice: 65.789%
+> Pylon: Recall: 80.851% Precision: 76.000% Specificity: 99.566% Dice: 78.351%
+
+ADDED: 
+- Skip connections 
+- HOG features: grey scale analyse of image shape
+- GAUSSIAN NOISE: adding some noise to the image
+- ENSEMBLING 
+- Data aug
+- double branch architecture: algo treat image in a hand and the hog feature in the other hand and then concatenate before final desicion
+- dropout
+- batchnorm
+- class weights
+- 50 epoch per ensemble
+- early stopping low patience
+
 ## Melen
 
 
