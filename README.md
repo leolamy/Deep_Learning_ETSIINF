@@ -1642,6 +1642,7 @@ def create_improved_model(input_shape=(128,128,3), num_classes=13, batch_size=12
 ```
 ### 3-8
 Adding GridSearch to get best transfer learning model -> EfficientNetB0
+The grid search revealed that the best performing configuration is EfficientNetB0 with freeze_last_only = True, achieving a validation accuracy of 0.6814. This strategy—fine‑tuning only the last convolutional block while keeping earlier layers frozen—strikes an optimal balance: it preserves the generic, lower‑level features learned from ImageNet, while allowing the higher‑level features to adapt specifically to the xview_recognition dataset. In contrast, completely freezing the backbone (freeze_last_only = False) gave lower accuracy (0.6629) because the model could not adjust to the new task, and full fine‑tuning (all layers trainable) likely led to overfitting or disruption of useful pre‑trained representations, resulting in even worse performance (0.6629 as well).
 Ensembling with 3 models 
 #### ADDED
 - resized 224x224 (original size)
@@ -1675,6 +1676,7 @@ Output layer: dense with 13 units and softmax activation, producing class probab
 
 
 We train three independent models with the same architecture (different random initialisations). Each is trained for up to 25 epochs using the full training set.
+
 
 #### TO ADD 
 special focus bad predicted classes
