@@ -1730,8 +1730,6 @@ Applied **only during training** (`do_augment=True`), not validation:
 - Random vertical flip
 - Random brightness shift (±0.1)
 
-> **Bug note (corrected):** Augmentation was previously applied unconditionally inside the generator, including during validation. This inflated validation metric variance and could cause suboptimal checkpoints to be saved.
-
 ### 3. MixUp
 
 Applied on training batches with `alpha=0.2`. MixUp creates convex combinations of pairs of samples and their labels:
@@ -1776,9 +1774,6 @@ These multipliers scale the gradient contribution of misclassified rare instance
 | `EarlyStopping(patience=8)` | `val_accuracy` | Halts training if no improvement, restores best weights |
 | `ReduceLROnPlateau(factor=0.5, patience=4)` | `val_accuracy` | Halves learning rate on plateau; min = 1e-6 |
 
-> **Bug note (corrected):** `ReduceLROnPlateau` was previously monitoring `val_loss` while `EarlyStopping` monitored `val_accuracy`. Misaligned monitors can trigger conflicting responses to the same training dynamics. Both now track `val_accuracy`.
-
----
 
 ## Ensemble
 
