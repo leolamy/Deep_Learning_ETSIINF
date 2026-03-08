@@ -1644,150 +1644,37 @@ def create_improved_model(input_shape=(128,128,3), num_classes=13, batch_size=12
 Adding GridSearch to get best transfer learning model -> EfficientNetB0
 Ensembling with 3 models 
 #### ADDED
-resized 224x224 (original size)
-Freeze last layer 
-MixUp data
-Categorical cross entropy 
-ReduceLRon plateau
-Spatial dropout
-Label Smoothing
-1 dense layer 1024 after convolutions
-globalAveragePooling2D
+- resized 224x224 (original size)
+- Freeze last layer 
+- MixUp data (alpha 0.2)
+- Categorical cross entropy 
+- ReduceLRon plateau
+- Spatial dropout
+- Label Smoothing
+- 1 dense layer 1024 after convolutions
+- globalAveragePooling2D
+- balance class calculated with len(class)
+
+Input layer: 224×224×3.
+
+Rescaling to [0, 255] (as expected by EfficientNet).
+
+Backbone: EfficientNetB0 with include_top=False and weights='imagenet'.
+
+Because freeze_last_only = True, we set backbone.trainable = False and then explicitly set backbone.layers[-1].trainable = True. This means that only the last convolutional block of the backbone is fine‑tuned; all earlier layers remain frozen.
+
+SpatialDropout2D (rate 0.3) applied to the backbone output.
+
+GlobalAveragePooling2D to convert feature maps into a vector.
+
+A dense layer with 1024 units and ReLU activation.
+
+Dropout (rate 0.4) for regularisation.
+
+Output layer: dense with 13 units and softmax activation, producing class probabilities.
 
 
-## Architecture
-
-### Pipeline Summary
-
-```
-Raw Image (GeoTIFF)
-        │
-        ▼
-  [0,1] float32  ──  resize to 224×224
-        │
-        ▼
-  Backbone-specific preprocess_input
-  (EfficientNet → [0,255] | MobileNetV2/ResNet50V2 → [-1,+1])
-        │
-        ▼
-  ┌─────────────────────────────────────┐
-  │  BACKBONE (ImageNet pretrained)     │
-  │  All layers frozen                  │
-  │  Except last Conv layer             │
-  │  (only trainable backbone layer)    │
-  └─────────────────────────────────────┘
-        │  feature map (7×7×C)
-        ▼
-  SpatialDropout2D(0.3)
-        │
-        ▼
-  GlobalAveragePooling2D  →  (batch, C)
-        │
-        ▼
-  Dense(1024, relu)
-        │
-        ▼
-  Dropout(0.4)
-        │
-        ▼
-  Dense(13, softmax)
-        │
-        ▼
-  OUTPUT  (batch, 13) — class probabilities
-```
-
-### Backbone Options
-
-| Backbone | Layers | Params | Preprocessing |
-|---|---|---|---|
-| EfficientNetB0 | ~237 | 4.0M | `[0, 255]` |
-| MobileNetV2 | ~155 | 2.2M | `[-1, +1]` |
-| ResNet50V2 | ~190 | 23.6M | `[-1, +1]` |
-
-**Each backbone uses its own `preprocess_input` function** — a critical correction from earlier versions that applied a single `Rescaling(255.0)` to all backbones, which broke MobileNetV2 and ResNet50V2 by feeding out-of-distribution inputs to their pretrained weights.
-
-### Freezing Strategy
-
-The backbone is **fully frozen except its last Conv layer**, which remains trainable. This allows slight adaptation of high-level features to satellite imagery specifics while preserving the bulk of ImageNet representations — and keeps compute cost low by minimizing the number of gradient updates through the backbone.
-
-> **Bug note (corrected):** The original code set `backbone.trainable = True` then froze only `layers[-1]`, which unintentionally left ~30 layers trainable. The corrected logic sets `backbone.trainable = False` first, then selectively unfreezes the last layer.
-
----
-
-## Training Pipeline
-
-### 1. GridSearch — Backbone Selection
-
-Before full training, **3 configurations** (one per backbone, fixed freeze strategy) are evaluated on a 25% data subset for 5 epochs each. This keeps grid search cost low while identifying the most promising backbone.
-
-EfficientNetB0 is consistently selected as the winner: its **compound scaling** (simultaneously scaling depth, width, and resolution) makes it better suited for the fine-grained textures and small object sizes typical of satellite imagery, compared to the simpler scaling strategies of ResNet or the channel-reduction bottleneck of MobileNet.
-
-### 2. Data Augmentation
-
-Applied **only during training** (`do_augment=True`), not validation:
-
-- Random horizontal flip
-- Random vertical flip
-- Random brightness shift (±0.1)
-
-### 3. MixUp
-
-Applied on training batches with `alpha=0.2`. MixUp creates convex combinations of pairs of samples and their labels:
-
-```
-mixed_x = λ·xᵢ + (1-λ)·xⱼ
-mixed_y = λ·yᵢ + (1-λ)·yⱼ
-```
-
-Where λ ~ Beta(0.2, 0.2), clamped to ≥ 0.5. This forces the model to learn **linear decision boundaries** between classes rather than sharp, brittle ones. Combined with label smoothing, it strongly reduces overconfidence on training data.
-
-### 4. Regularization Stack
-
-| Technique | Location | Role |
-|---|---|---|
-| `SpatialDropout2D(0.3)` | After backbone | Drops entire feature maps — more effective than pixel-level dropout for CNNs as it forces the network to distribute information across channels |
-| `Dropout(0.4)` | After Dense(1024) | Prevents co-adaptation in the dense head |
-| `Label Smoothing(0.1)` | Loss function | Softens one-hot targets to `(1-ε)` for the true class and `ε/(K-1)` for others; prevents overconfident softmax outputs |
-| `MixUp(α=0.2)` | Data pipeline | Creates soft inter-class training examples |
-
-### 5. Class Balancing
-
-The dataset has up to a **32:1 class imbalance ratio**. Two complementary mechanisms address this:
-
-**Automated class weights** via inverse frequency:
-
-$$w_c = \frac{N_{\text{total}}}{K \times n_c}$$
-
-Where $N_{\text{total}}$ is total samples, $K$ is number of classes, and $n_c$ is samples in class $c$.
-
-**Manual multipliers** applied on top for the most problematic classes:
-- Truck (`×1.5`)
-- Helipad (`×1.5`)
-
-These multipliers scale the gradient contribution of misclassified rare instances, directly steering the optimizer toward learning these underrepresented patterns.
-
-### 6. Callbacks
-
-| Callback | Monitor | Role |
-|---|---|---|
-| `ModelCheckpoint` | `val_accuracy` | Saves the best model per training run |
-| `EarlyStopping(patience=8)` | `val_accuracy` | Halts training if no improvement, restores best weights |
-| `ReduceLROnPlateau(factor=0.5, patience=4)` | `val_accuracy` | Halves learning rate on plateau; min = 1e-6 |
-
-
-## Ensemble
-
-Three models are trained independently with diversified seeds and slightly different learning rates:
-
-| Model | Seed | Learning Rate |
-|---|---|---|
-| Model 0 | 0 | 1e-3 |
-| Model 1 | 42 | 8e-4 |
-| Model 2 | 84 | 6.4e-4 |
-
-Final prediction = **mean of the three softmax outputs**. Ensemble diversity reduces prediction variance and typically yields a 1–2% accuracy improvement over any single model.
-
----
+We train three independent models with the same architecture (different random initialisations). Each is trained for up to 25 epochs using the full training set.
 
 #### TO ADD 
 special focus bad predicted classes
@@ -1796,3 +1683,5 @@ fine-tune not frozen layers
 - Mean Accuracy: 83.962%
 - Mean Recall: 85.954%
 - Mean Precision: 87.023%
+
+
