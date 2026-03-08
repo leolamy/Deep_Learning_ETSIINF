@@ -1654,6 +1654,7 @@ Label Smoothing
 1 dense layer 1024 after convolutions
 globalAveragePooling2D
 
+
 ## Architecture
 
 ### Pipeline Summary
@@ -1671,9 +1672,9 @@ Raw Image (GeoTIFF)
         ▼
   ┌─────────────────────────────────────┐
   │  BACKBONE (ImageNet pretrained)     │
-  │  - All layers frozen                │
-  │  - Except last Conv layer if        │
-  │    freeze_last_only=True            │
+  │  All layers frozen                  │
+  │  Except last Conv layer             │
+  │  (only trainable backbone layer)    │
   └─────────────────────────────────────┘
         │  feature map (7×7×C)
         ▼
@@ -1707,10 +1708,7 @@ Raw Image (GeoTIFF)
 
 ### Freezing Strategy
 
-Two modes controlled by `freeze_last_only`:
-
-- `True` — backbone fully frozen **except** its last Conv layer (1 trainable layer). Allows slight adaptation of high-level features while preserving the bulk of ImageNet representations.
-- `False` — entire backbone frozen. Used as feature extractor only; only the dense head trains.
+The backbone is **fully frozen except its last Conv layer**, which remains trainable. This allows slight adaptation of high-level features to satellite imagery specifics while preserving the bulk of ImageNet representations — and keeps compute cost low by minimizing the number of gradient updates through the backbone.
 
 > **Bug note (corrected):** The original code set `backbone.trainable = True` then froze only `layers[-1]`, which unintentionally left ~30 layers trainable. The corrected logic sets `backbone.trainable = False` first, then selectively unfreezes the last layer.
 
@@ -1718,11 +1716,11 @@ Two modes controlled by `freeze_last_only`:
 
 ## Training Pipeline
 
-### 1. GridSearch — Backbone & Freeze Strategy Selection
+### 1. GridSearch — Backbone Selection
 
-Before full training, **6 configurations** (3 backbones × 2 freeze modes) are evaluated on a 25% data subset for 5 epochs each. This keeps grid search cost low while identifying the most promising configuration.
+Before full training, **3 configurations** (one per backbone, fixed freeze strategy) are evaluated on a 25% data subset for 5 epochs each. This keeps grid search cost low while identifying the most promising backbone.
 
-EfficientNetB0 was consistently selected as the winner: its **compound scaling** (simultaneously scaling depth, width, and resolution) makes it better suited for the fine-grained textures and small object sizes typical of satellite imagery, compared to the simpler scaling strategies of ResNet or the channel-reduction bottleneck of MobileNet.
+EfficientNetB0 is consistently selected as the winner: its **compound scaling** (simultaneously scaling depth, width, and resolution) makes it better suited for the fine-grained textures and small object sizes typical of satellite imagery, compared to the simpler scaling strategies of ResNet or the channel-reduction bottleneck of MobileNet.
 
 ### 2. Data Augmentation
 
@@ -1793,6 +1791,8 @@ Three models are trained independently with diversified seeds and slightly diffe
 | Model 2 | 84 | 6.4e-4 |
 
 Final prediction = **mean of the three softmax outputs**. Ensemble diversity reduces prediction variance and typically yields a 1–2% accuracy improvement over any single model.
+
+---
 
 #### TO ADD 
 special focus bad predicted classes
