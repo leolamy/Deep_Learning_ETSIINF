@@ -1532,3 +1532,272 @@ ADDED:
 
 ## Adrian
 
+# 3rd report
+## Léo
+### 3-5
+Adding manuel convolutions with ensembling + skip connection (previous architecture)
+- Mean Accuracy: 74.858%
+- Mean Recall: 78.630%
+- Mean Precision: 75.135%
+```python
+import tensorflow as tf
+from tensorflow.keras.layers import Input, RandomFlip, GaussianNoise, Conv2D, BatchNormalization, Activation, MaxPooling2D, GlobalAveragePooling2D, Dense, Dropout, Add
+from tensorflow.keras.models import Model
+from tensorflow.keras.optimizers import Nadam
+from tensorflow.keras.losses import CategoricalFocalCrossentropy
+
+def create_improved_model(input_shape=(128,128,3), num_classes=13, batch_size=128, train_size=None):
+    """
+    Crée un modèle CNN avec des blocs résiduels, sans branche HOG.
+    train_size : nombre d'images d'entraînement (pour le learning rate schedule)
+    """
+    img_input = Input(shape=input_shape, name='img_input')
+
+    # Augmentations
+    x = RandomFlip('horizontal_and_vertical')(img_input)
+    x = GaussianNoise(0.01)(x)
+
+    # Bloc 1
+    x = Conv2D(64, (3,3), padding='same', kernel_initializer='he_normal')(x)
+    x = BatchNormalization()(x)
+    x = Activation('swish')(x)
+    x = MaxPooling2D((2,2))(x)  # 64x64
+
+    # Bloc 2 (résiduel)
+    shortcut = x
+    x = Conv2D(128, (3,3), padding='same', kernel_initializer='he_normal')(x)
+    x = BatchNormalization()(x)
+    x = Activation('swish')(x)
+    x = Conv2D(128, (3,3), padding='same', kernel_initializer='he_normal')(x)
+    x = BatchNormalization()(x)
+    shortcut = Conv2D(128, (1,1), padding='same')(shortcut)
+    x = Add()([x, shortcut])
+    x = Activation('swish')(x)
+    x = MaxPooling2D((2,2))(x)  # 32x32
+
+    # Bloc 3 (résiduel)
+    shortcut = x
+    x = Conv2D(256, (3,3), padding='same', kernel_initializer='he_normal')(x)
+    x = BatchNormalization()(x)
+    x = Activation('swish')(x)
+    x = Conv2D(256, (3,3), padding='same', kernel_initializer='he_normal')(x)
+    x = BatchNormalization()(x)
+    shortcut = Conv2D(256, (1,1), padding='same')(shortcut)
+    x = Add()([x, shortcut])
+    x = Activation('swish')(x)
+    x = MaxPooling2D((2,2))(x)  # 16x16
+
+    # Bloc 4 (résiduel)
+    shortcut = x
+    x = Conv2D(512, (3,3), padding='same', kernel_initializer='he_normal')(x)
+    x = BatchNormalization()(x)
+    x = Activation('swish')(x)
+    x = Conv2D(512, (3,3), padding='same', kernel_initializer='he_normal')(x)
+    x = BatchNormalization()(x)
+    shortcut = Conv2D(512, (1,1), padding='same')(shortcut)
+    x = Add()([x, shortcut])
+    x = Activation('swish')(x)
+    x = GlobalAveragePooling2D()(x)  # 512
+
+    # Couches fully connected (avec skip)
+    dense1 = Dense(1024, kernel_initializer='he_normal')(x)
+    dense1 = BatchNormalization()(dense1)
+    dense1 = Activation('swish')(dense1)
+    dense1 = Dropout(0.4)(dense1)
+
+    dense2 = Dense(1024, kernel_initializer='he_normal')(dense1)
+    dense2 = BatchNormalization()(dense2)
+    dense2 = Activation('swish')(dense2)
+    dense2 = Dropout(0.3)(dense2)
+
+    added = Add()([dense1, dense2])
+
+    dense3 = Dense(512, kernel_initializer='he_normal')(added)
+    dense3 = BatchNormalization()(dense3)
+    dense3 = Activation('swish')(dense3)
+    dense3 = Dropout(0.2)(dense3)
+
+    outputs = Dense(num_classes, activation='softmax')(dense3)
+
+    model = Model(inputs=img_input, outputs=outputs)
+
+    # Learning rate schedule (cosine decay)
+    if train_size is not None:
+        decay_steps = 100 * (train_size // batch_size)
+    else:
+        decay_steps = 1000  # fallback
+
+    lr_schedule = tf.keras.optimizers.schedules.CosineDecay(
+        initial_learning_rate=0.001,
+        decay_steps=decay_steps,
+        alpha=0.1
+    )
+
+    model.compile(
+        optimizer=Nadam(learning_rate=lr_schedule, weight_decay=1e-4),
+        loss=CategoricalFocalCrossentropy(alpha=0.25, gamma=2.0),
+        metrics=['accuracy']
+    )
+    return model
+```
+### 3-8
+Adding GridSearch to get best transfer learning model -> EfficientNetB0
+Ensembling with 3 models 
+#### ADDED
+resized 224x224 (original size)
+Freeze last layer 
+MixUp data
+Categorical cross entropy 
+ReduceLRon plateau
+Spatial dropout
+Label Smoothing
+1 dense layer 1024 after convolutions
+globalAveragePooling2D
+
+## Architecture
+
+### Pipeline Summary
+
+```
+Raw Image (GeoTIFF)
+        │
+        ▼
+  [0,1] float32  ──  resize to 224×224
+        │
+        ▼
+  Backbone-specific preprocess_input
+  (EfficientNet → [0,255] | MobileNetV2/ResNet50V2 → [-1,+1])
+        │
+        ▼
+  ┌─────────────────────────────────────┐
+  │  BACKBONE (ImageNet pretrained)     │
+  │  - All layers frozen                │
+  │  - Except last Conv layer if        │
+  │    freeze_last_only=True            │
+  └─────────────────────────────────────┘
+        │  feature map (7×7×C)
+        ▼
+  SpatialDropout2D(0.3)
+        │
+        ▼
+  GlobalAveragePooling2D  →  (batch, C)
+        │
+        ▼
+  Dense(1024, relu)
+        │
+        ▼
+  Dropout(0.4)
+        │
+        ▼
+  Dense(13, softmax)
+        │
+        ▼
+  OUTPUT  (batch, 13) — class probabilities
+```
+
+### Backbone Options
+
+| Backbone | Layers | Params | Preprocessing |
+|---|---|---|---|
+| EfficientNetB0 | ~237 | 4.0M | `[0, 255]` |
+| MobileNetV2 | ~155 | 2.2M | `[-1, +1]` |
+| ResNet50V2 | ~190 | 23.6M | `[-1, +1]` |
+
+**Each backbone uses its own `preprocess_input` function** — a critical correction from earlier versions that applied a single `Rescaling(255.0)` to all backbones, which broke MobileNetV2 and ResNet50V2 by feeding out-of-distribution inputs to their pretrained weights.
+
+### Freezing Strategy
+
+Two modes controlled by `freeze_last_only`:
+
+- `True` — backbone fully frozen **except** its last Conv layer (1 trainable layer). Allows slight adaptation of high-level features while preserving the bulk of ImageNet representations.
+- `False` — entire backbone frozen. Used as feature extractor only; only the dense head trains.
+
+> **Bug note (corrected):** The original code set `backbone.trainable = True` then froze only `layers[-1]`, which unintentionally left ~30 layers trainable. The corrected logic sets `backbone.trainable = False` first, then selectively unfreezes the last layer.
+
+---
+
+## Training Pipeline
+
+### 1. GridSearch — Backbone & Freeze Strategy Selection
+
+Before full training, **6 configurations** (3 backbones × 2 freeze modes) are evaluated on a 25% data subset for 5 epochs each. This keeps grid search cost low while identifying the most promising configuration.
+
+EfficientNetB0 was consistently selected as the winner: its **compound scaling** (simultaneously scaling depth, width, and resolution) makes it better suited for the fine-grained textures and small object sizes typical of satellite imagery, compared to the simpler scaling strategies of ResNet or the channel-reduction bottleneck of MobileNet.
+
+### 2. Data Augmentation
+
+Applied **only during training** (`do_augment=True`), not validation:
+
+- Random horizontal flip
+- Random vertical flip
+- Random brightness shift (±0.1)
+
+> **Bug note (corrected):** Augmentation was previously applied unconditionally inside the generator, including during validation. This inflated validation metric variance and could cause suboptimal checkpoints to be saved.
+
+### 3. MixUp
+
+Applied on training batches with `alpha=0.2`. MixUp creates convex combinations of pairs of samples and their labels:
+
+```
+mixed_x = λ·xᵢ + (1-λ)·xⱼ
+mixed_y = λ·yᵢ + (1-λ)·yⱼ
+```
+
+Where λ ~ Beta(0.2, 0.2), clamped to ≥ 0.5. This forces the model to learn **linear decision boundaries** between classes rather than sharp, brittle ones. Combined with label smoothing, it strongly reduces overconfidence on training data.
+
+### 4. Regularization Stack
+
+| Technique | Location | Role |
+|---|---|---|
+| `SpatialDropout2D(0.3)` | After backbone | Drops entire feature maps — more effective than pixel-level dropout for CNNs as it forces the network to distribute information across channels |
+| `Dropout(0.4)` | After Dense(1024) | Prevents co-adaptation in the dense head |
+| `Label Smoothing(0.1)` | Loss function | Softens one-hot targets to `(1-ε)` for the true class and `ε/(K-1)` for others; prevents overconfident softmax outputs |
+| `MixUp(α=0.2)` | Data pipeline | Creates soft inter-class training examples |
+
+### 5. Class Balancing
+
+The dataset has up to a **32:1 class imbalance ratio**. Two complementary mechanisms address this:
+
+**Automated class weights** via inverse frequency:
+
+$$w_c = \frac{N_{\text{total}}}{K \times n_c}$$
+
+Where $N_{\text{total}}$ is total samples, $K$ is number of classes, and $n_c$ is samples in class $c$.
+
+**Manual multipliers** applied on top for the most problematic classes:
+- Truck (`×1.5`)
+- Helipad (`×1.5`)
+
+These multipliers scale the gradient contribution of misclassified rare instances, directly steering the optimizer toward learning these underrepresented patterns.
+
+### 6. Callbacks
+
+| Callback | Monitor | Role |
+|---|---|---|
+| `ModelCheckpoint` | `val_accuracy` | Saves the best model per training run |
+| `EarlyStopping(patience=8)` | `val_accuracy` | Halts training if no improvement, restores best weights |
+| `ReduceLROnPlateau(factor=0.5, patience=4)` | `val_accuracy` | Halves learning rate on plateau; min = 1e-6 |
+
+> **Bug note (corrected):** `ReduceLROnPlateau` was previously monitoring `val_loss` while `EarlyStopping` monitored `val_accuracy`. Misaligned monitors can trigger conflicting responses to the same training dynamics. Both now track `val_accuracy`.
+
+---
+
+## Ensemble
+
+Three models are trained independently with diversified seeds and slightly different learning rates:
+
+| Model | Seed | Learning Rate |
+|---|---|---|
+| Model 0 | 0 | 1e-3 |
+| Model 1 | 42 | 8e-4 |
+| Model 2 | 84 | 6.4e-4 |
+
+Final prediction = **mean of the three softmax outputs**. Ensemble diversity reduces prediction variance and typically yields a 1–2% accuracy improvement over any single model.
+
+#### TO ADD 
+special focus bad predicted classes
+fine-tune not frozen layers
+#### Results
+- Mean Accuracy: 83.962%
+- Mean Recall: 85.954%
+- Mean Precision: 87.023%
