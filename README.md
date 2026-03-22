@@ -685,6 +685,342 @@ accuracy: 0.1409 - loss: 260.0886 - val_accuracy: 0.1925 - val_loss: 2.3251 - le
 
 ## Melen
 
+# Last Assignment
+## Adrián
 
-## Adrian
+### EXPERIMENT 1
+#### Hyperparameters : 
+```
+ opt = SGD(learning_rate=5e-4, momentum=0.9, nesterov=True, global_clipnorm=10.0)
+model.compile(optimizer=opt, classification_loss='binary_crossentropy', box_loss='ciou', jit_compile=False)
+```
+```
+model_checkpoint = ModelCheckpoint('model.keras', monitor='val_loss', verbose=1, save_best_only=True)
+reduce_lr = ReduceLROnPlateau('val_loss', factor=0.5, patience=4, verbose=1)
+early_stop = EarlyStopping('val_loss', patience=12, verbose=1)
+terminate = TerminateOnNaN()
+callbacks = [model_checkpoint, reduce_lr, early_stop, terminate]
+```
+
+```
+data_augmentation = tf.keras.Sequential(
+    layers=[keras_cv.layers.RandomFlip(mode='horizontal_and_vertical', bounding_box_format='xyxy'),
+            keras_cv.layers.RandomShear(x_factor=0.2, y_factor=0.2, bounding_box_format='xyxy'),
+            keras_cv.layers.RandomColorDegeneration(factor=0.5)])
+
+epochs = 40
+batch_size = 4
+
+```
+
+#### Model:
+```
+prediction_decoder = keras_cv.layers.NonMaxSuppression(bounding_box_format='xyxy', from_logits=False, confidence_threshold=0.2, iou_threshold=0.7)
+model = keras_cv.models.YOLOV8Detector.from_preset(preset='yolo_v8_xs_backbone_coco', num_classes=len(categories), load_weights=True, bounding_box_format='xyxy', prediction_decoder=prediction_decoder)
+model.summary()
+```
+
+#### Results :
+
+##### Confussion Matrix:
+
+| Annotation  \ Prediction | BACKGROUND | Small car | Bus  | Truck | Building |
+|-------------------------|------------|-----------|------|-------|----------|
+| BACKGROUND              | 0.00       | 0.31      | 0.01 | 0.00  | 0.68     |
+| Small car               | 0.56       | 0.44      | 0.00 | 0.00  | 0.00     |
+| Bus                     | 0.90       | 0.00      | 0.10 | 0.00  | 0.00     |
+| Truck                   | 1.00       | 0.00      | 0.00 | 0.00  | 0.00     |
+| Building                | 0.49       | 0.00      | 0.00 | 0.00  | 0.51     |
+
+##### Metrics:
+
+```
+> Small car: Recall: 43.535% Precision: 57.917% AP: 32.940%
+> Bus: Recall: 10.469% Precision: 32.683% AP: 4.655%
+> Truck: Recall: 0.479% Precision: 41.667% AP: 0.363%
+> Building: Recall: 50.851% Precision: 54.603% AP: 40.963%
+mAccuracy: 33.921%
+mRecall: 21.067%
+mPrecision: 37.374%
+mAP: 19.730%
+```
+
+### EXPERIMENT 2
+#### Hyperparameters : 
+```
+ opt = SGD(learning_rate=5e-4, momentum=0.9, nesterov=True, global_clipnorm=10.0)
+model.compile(optimizer=opt, classification_loss='binary_crossentropy', box_loss='ciou', jit_compile=False)
+```
+```
+model_checkpoint = ModelCheckpoint('model.keras', monitor='val_loss', verbose=1, save_best_only=True)
+reduce_lr = ReduceLROnPlateau('val_loss', factor=0.5, patience=3, verbose=1)
+early_stop = EarlyStopping('val_loss', patience=8, verbose=1)
+terminate = TerminateOnNaN()
+callbacks = [model_checkpoint, reduce_lr, early_stop, terminate]
+```
+
+```
+data_augmentation = tf.keras.Sequential(
+    layers=[keras_cv.layers.RandomFlip(mode='horizontal_and_vertical', bounding_box_format='xyxy'),
+            keras_cv.layers.RandomShear(x_factor=0.2, y_factor=0.2, bounding_box_format='xyxy'),
+            keras_cv.layers.RandomColorDegeneration(factor=0.5)])
+
+epochs = 40
+batch_size = 4
+
+```
+
+#### Model:
+```
+# Load architecture
+from types import SimpleNamespace
+
+import numpy as np
+import torch
+from torchvision.models import ResNet50_Weights
+from torchvision.models.detection import FasterRCNN_ResNet50_FPN_V2_Weights, fasterrcnn_resnet50_fpn_v2
+from torchvision.models.detection.faster_rcnn import FastRCNNPredictor
+
+print('Load model')
+# Unit 2 describes Faster R-CNN as a two-stage detector: first generate proposals, then refine and classify them.
+# We keep transfer learning because the xView subset is much smaller than the original COCO detection benchmark.
+class TorchFasterRCNNWrapper:
+    def __init__(self, num_classes, max_detections=100, micro_batch_size=1):
+        self.num_classes = num_classes
+        self.max_detections = max_detections
+        self.micro_batch_size = micro_batch_size
+        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+        self.detector = self._build_detector()
+        self.optimizer = None
+        self.clip_norm = 10.0
+
+    def _build_detector(self):
+        common_kwargs = dict(min_size=640, max_size=640, box_detections_per_img=self.max_detections, box_score_thresh=0.2, trainable_backbone_layers=2)
+        try:
+            detector = fasterrcnn_resnet50_fpn_v2(weights=FasterRCNN_ResNet50_FPN_V2_Weights.DEFAULT, **common_kwargs)
+            init_msg = 'COCO pretrained Faster R-CNN'
+        except Exception as exc:
+            print(f'COCO weights unavailable ({exc}). Trying ImageNet backbone...')
+            try:
+                detector = fasterrcnn_resnet50_fpn_v2(weights=None, weights_backbone=ResNet50_Weights.DEFAULT, **common_kwargs)
+                init_msg = 'ImageNet pretrained backbone'
+            except Exception as exc_backbone:
+                print(f'Backbone weights unavailable ({exc_backbone}). Falling back to random initialization...')
+                detector = fasterrcnn_resnet50_fpn_v2(weights=None, weights_backbone=None, **common_kwargs)
+                init_msg = 'random initialization'
+        in_features = detector.roi_heads.box_predictor.cls_score.in_features
+        detector.roi_heads.box_predictor = FastRCNNPredictor(in_features, self.num_classes + 1)
+        detector.to(self.device)
+        print(f'Using {init_msg} on {self.device}.')
+        return detector
+
+    def summary(self):
+        print(self.detector)
+
+    def compile(self, learning_rate=1e-4, momentum=0.9, weight_decay=5e-4, clip_norm=10.0):
+        params = [param for param in self.detector.parameters() if param.requires_grad]
+        self.optimizer = torch.optim.SGD(params, lr=learning_rate, momentum=momentum, weight_decay=weight_decay)
+        self.clip_norm = clip_norm
+
+    def save_weights(self, filepath):
+        payload = {'model_state_dict': self.detector.state_dict()}
+        if self.optimizer is not None:
+            payload['optimizer_state_dict'] = self.optimizer.state_dict()
+        torch.save(payload, filepath)
+
+    def load_weights(self, filepath):
+        payload = torch.load(filepath, map_location=self.device)
+        state_dict = payload['model_state_dict'] if isinstance(payload, dict) and 'model_state_dict' in payload else payload
+        self.detector.load_state_dict(state_dict)
+        self.detector.to(self.device)
+        return self
+
+    def _split_batch(self, images, bbox_dict):
+        if hasattr(images, 'numpy'):
+            images = images.numpy()
+        boxes = bbox_dict['boxes'].numpy() if hasattr(bbox_dict['boxes'], 'numpy') else bbox_dict['boxes']
+        classes = bbox_dict['classes'].numpy() if hasattr(bbox_dict['classes'], 'numpy') else bbox_dict['classes']
+
+        image_list, target_list = [], []
+        for idx in range(images.shape[0]):
+            image = torch.from_numpy(images[idx].astype('float32') / 255.0).permute(2, 0, 1)
+            box = boxes[idx].astype('float32')
+            label = classes[idx].astype('int64')
+            valid = (box[:, 2] > box[:, 0]) & (box[:, 3] > box[:, 1])
+            box = box[valid]
+            label = label[valid] + 1
+
+            image_list.append(image)
+            target_list.append({'boxes': torch.as_tensor(box, dtype=torch.float32), 'labels': torch.as_tensor(label, dtype=torch.int64)})
+        return image_list, target_list
+
+    def _train_or_validate(self, dataset, steps, training=True):
+        losses = []
+        self.detector.train()
+        iterator = dataset.take(steps)
+        context = torch.enable_grad() if training else torch.no_grad()
+
+        with context:
+            for images, bbox_dict in iterator:
+                image_list, target_list = self._split_batch(images, bbox_dict)
+                for start in range(0, len(image_list), self.micro_batch_size):
+                    imgs = [img.to(self.device) for img in image_list[start:start + self.micro_batch_size]]
+                    tgts = [{key: value.to(self.device) for key, value in tgt.items()} for tgt in target_list[start:start + self.micro_batch_size]]
+
+                    if training:
+                        self.optimizer.zero_grad()
+
+                    loss_dict = self.detector(imgs, tgts)
+                    loss = sum(value for value in loss_dict.values())
+                    loss_value = float(loss.detach().cpu().item())
+
+                    if training:
+                        loss.backward()
+                        torch.nn.utils.clip_grad_norm_(self.detector.parameters(), self.clip_norm)
+                        self.optimizer.step()
+
+                    losses.append(loss_value)
+
+        self.detector.eval()
+        return float(np.mean(losses)) if losses else np.inf
+
+    def _monitor_name(self, callback, default='val_loss'):
+        return getattr(callback, 'monitor', default) if callback is not None else default
+
+    def _extract_callback(self, callbacks, name):
+        for callback in callbacks:
+            if callback.__class__.__name__ == name:
+                return callback
+        return None
+
+    def fit(self, dataset, steps_per_epoch=None, validation_data=None, validation_steps=None, epochs=1, callbacks=None, verbose=1):
+        if self.optimizer is None:
+            raise RuntimeError('Call compile() before fit().')
+
+        callbacks = callbacks or []
+        checkpoint_cb = self._extract_callback(callbacks, 'ModelCheckpoint')
+        reduce_lr_cb = self._extract_callback(callbacks, 'ReduceLROnPlateau')
+        early_stop_cb = self._extract_callback(callbacks, 'EarlyStopping')
+
+        history = {'loss': [], 'val_loss': []}
+        best_metric = np.inf
+        checkpoint_saved = False
+        reduce_wait = 0
+        early_wait = 0
+
+        for epoch in range(epochs):
+            train_loss = self._train_or_validate(dataset, steps_per_epoch, training=True)
+            history['loss'].append(train_loss)
+
+            metric_name = 'loss'
+            metric_value = train_loss
+            if validation_data is not None:
+                val_loss = self._train_or_validate(validation_data, validation_steps, training=False)
+                history['val_loss'].append(val_loss)
+                metric_name = 'val_loss'
+                metric_value = val_loss
+
+            current_lr = self.optimizer.param_groups[0]['lr']
+            if verbose:
+                if validation_data is not None:
+                    print(f'Epoch {epoch + 1}/{epochs} - loss: {train_loss:.4f} - val_loss: {metric_value:.4f} - lr: {current_lr:.6f}')
+                else:
+                    print(f'Epoch {epoch + 1}/{epochs} - loss: {train_loss:.4f} - lr: {current_lr:.6f}')
+
+            if not np.isfinite(metric_value):
+                print('TerminateOnNaN: stopping training because the monitored loss is not finite.')
+                break
+
+            if metric_value < best_metric:
+                best_metric = metric_value
+                reduce_wait = 0
+                early_wait = 0
+                if checkpoint_cb is not None:
+                    self.save_weights(checkpoint_cb.filepath)
+                    checkpoint_saved = True
+            else:
+                reduce_wait += 1
+                early_wait += 1
+
+                if reduce_lr_cb is not None and self._monitor_name(reduce_lr_cb) == metric_name and reduce_wait >= reduce_lr_cb.patience:
+                    for group in self.optimizer.param_groups:
+                        group['lr'] *= reduce_lr_cb.factor
+                    reduce_wait = 0
+                    print(f'ReduceLROnPlateau: reducing learning rate to {self.optimizer.param_groups[0]["lr"]:.6f}')
+
+                if early_stop_cb is not None and self._monitor_name(early_stop_cb) == metric_name and early_wait >= early_stop_cb.patience:
+                    print(f'EarlyStopping: stopping at epoch {epoch + 1}')
+                    break
+
+        if checkpoint_cb is not None and checkpoint_saved:
+            self.load_weights(checkpoint_cb.filepath)
+
+        return SimpleNamespace(history=history)
+
+    def predict(self, images, verbose=0):
+        if hasattr(images, 'numpy'):
+            images = images.numpy()
+
+        batch = []
+        for idx in range(images.shape[0]):
+            image = torch.from_numpy(images[idx].astype('float32') / 255.0).permute(2, 0, 1).to(self.device)
+            batch.append(image)
+
+        self.detector.eval()
+        with torch.no_grad():
+            outputs = self.detector(batch)
+
+        output = outputs[0]
+        boxes = output['boxes'].detach().cpu().numpy()
+        scores = output['scores'].detach().cpu().numpy()
+        labels = output['labels'].detach().cpu().numpy() - 1
+
+        keep = labels >= 0
+        boxes = boxes[keep]
+        scores = scores[keep]
+        labels = labels[keep]
+
+        num = min(len(scores), self.max_detections)
+        padded_boxes = np.zeros((1, self.max_detections, 4), dtype=np.float32)
+        padded_scores = np.zeros((1, self.max_detections), dtype=np.float32)
+        padded_labels = np.zeros((1, self.max_detections), dtype=np.int32)
+
+        if num > 0:
+            padded_boxes[0, :num] = boxes[:num]
+            padded_scores[0, :num] = scores[:num]
+            padded_labels[0, :num] = labels[:num]
+
+        return {'boxes': padded_boxes, 'confidence': padded_scores, 'classes': padded_labels, 'num_detections': np.array([num], dtype=np.int32)}
+
+model = TorchFasterRCNNWrapper(num_classes=len(categories), max_detections=100, micro_batch_size=1)
+model.summary()
+```
+
+#### Results :
+
+##### Confussion Matrix:
+
+| Annotation  \ Prediction | BACKGROUND | Small car | Bus  | Truck | Building |
+|-------------------------|------------|-----------|------|-------|----------|
+| BACKGROUND              | 0.00       | 0.31      | 0.01 | 0.00  | 0.68     |
+| Small car               | 0.53       | 0.47      | 0.00 | 0.00  | 0.00     |
+| Bus                     | 0.92       | 0.00      | 0.08 | 0.00  | 0.00     |
+| Truck                   | 1.00       | 0.00      | 0.00 | 0.00  | 0.00     |
+| Building                | 0.50       | 0.00      | 0.00 | 0.00  | 0.50     |
+
+##### Metrics:
+
+```
+> Small car: Recall: 47.077% Precision: 59.811% AP: 36.542%
+> Bus: Recall: 7.969% Precision: 30.357% AP: 3.023%
+> Truck: Recall: 0.192% Precision: 22.222% AP: 0.096%
+> Building: Recall: 49.890% Precision: 54.232% AP: 40.001%
+mAccuracy: 34.452%
+mRecall: 21.026%
+mPrecision: 33.325%
+mAP: 19.916%
+```
+
+
+
 
