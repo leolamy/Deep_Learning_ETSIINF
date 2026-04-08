@@ -1,0 +1,107 @@
+\subsection{Additional CNN Architectures Explored in Other Notebooks}
+\label{sec:other_cnn_architectures}
+
+Beyond the architectures discussed in Notebook 3-8, several additional CNN experiments were explored in Notebooks 3-1 to 3-12. We select here four particularly informative ones: one custom architecture based on manually designed convolutional and residual blocks, plus three transfer-learning pipelines from the EfficientNet family. Together, these experiments highlight that both the \emph{architectural design} and the surrounding \emph{training recipe} (data augmentation, loss, fine-tuning schedule, and ensembling) have a major impact on final performance.
+
+\paragraph{Important comparability note.} These experiments should be interpreted as \emph{supplementary} rather than strictly comparable to the controlled benchmark of Section~\ref{sec:transfer}. In particular, some notebooks use different input sizes, stronger augmentation, mixed precision, two-stage fine-tuning, and an ensemble of three independently trained models at inference time. Therefore, the numbers below represent an extended exploration of the design space rather than a direct replacement for the main benchmark.
+
+\begin{table}[H]
+\centering
+\caption{Additional CNN experiments selected from notebooks other than 3-8.}
+\label{tab:other_architectures_summary}
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Notebook / Experiment} & \textbf{Input} & \textbf{Training Regime} & \textbf{Accuracy} & \textbf{Mean F1} \\
+\midrule
+3-5: manual convolutional CNN with residual blocks & $128 \times 128$ & Training from scratch + ensemble & 74.86\% & 76.88\% \\
+3-7: EfficientNetB0, staged fine-tuning & $96 \times 96$ & Transfer + 2 phases + ensemble & 74.86\% & 76.88\% \\
+3-9: EfficientNetB2, mixed-precision pipeline & $224 \times 224$ & Transfer + MixUp + fine-tuning + ensemble & 83.57\% & 86.99\% \\
+3-10: EfficientNetB0, backbone-screened pipeline & $224 \times 224$ & Transfer + backbone search + MixUp + ensemble & \textbf{83.96\%} & \textbf{87.04\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsubsection{Experiment 0: Manual Convolutional CNN with Residual Blocks (Notebook 3-5)}
+
+Notebook 3-5 is noteworthy because it does \emph{not} rely on a standard published backbone. Instead, it implements a custom CNN built from manually specified convolutional blocks, residual shortcuts, and a dense classification head. In that sense, it sits conceptually between the purely custom models of Notebook 3-8 and the later transfer-learning experiments.
+
+\paragraph{Configuration highlights.}
+\begin{itemize}
+    \item \textbf{Input size:} $128 \times 128 \times 3$
+    \item \textbf{Convolutional stem:} initial $3 \times 3$ convolution with 64 filters
+    \item \textbf{Residual blocks:} three manually designed residual stages with 128, 256, and 512 filters
+    \item \textbf{Pooling/head:} MaxPooling between stages, then GlobalAveragePooling and a dense head with skip connection
+    \item \textbf{Loss:} Categorical Focal Crossentropy
+    \item \textbf{Optimizer:} Nadam with cosine decay and weight decay
+    \item \textbf{Regularization:} BatchNorm, Gaussian noise, dropout, and class weighting
+    \item \textbf{Inference:} ensemble of 3 independently trained models
+\end{itemize}
+
+\paragraph{Results.} This architecture achieves \textbf{74.86\% accuracy}, \textbf{78.63\% mean recall}, and \textbf{75.14\% mean precision}, corresponding to a mean F1-score of approximately \textbf{76.88\%}. Class-wise, it performs strongly on \textit{Cargo plane} (92.39\% F1), \textit{Excavator} (85.14\% F1), \textit{Building} (84.35\% F1), \textit{Pylon} (81.48\% F1), and \textit{Storage tank} (79.43\% F1). It also handles the minority \textit{Helipad} class reasonably well, reaching 88.24\% recall and 76.92\% F1-score. The most difficult class remains \textit{Truck}, with 43.59\% F1-score.
+
+\paragraph{Why it is interesting.} This experiment shows that \textbf{manually designed convolutions already capture much of the useful spatial structure} in the dataset, even without external pre-training. It clearly surpasses the best ffNN baseline and also slightly improves over the custom Inception-style CNN from Notebook 3-8 in raw validation accuracy. At the same time, it still remains below the best transfer-learning pipelines, which suggests that pre-trained representations and stronger optimization strategies continue to provide an additional performance boost.
+
+\subsubsection{Experiment 1: EfficientNetB0 with Staged Fine-Tuning (Notebook 3-7)}
+
+The first additional experiment uses an \textbf{ImageNet-pretrained EfficientNetB0} backbone with a compact classifier head and a two-phase training schedule. In the first phase, the backbone remains frozen while a new dense head is optimized. In the second phase, the last 30 layers of the backbone are unfrozen and fine-tuned with a much smaller learning rate. The notebook also uses focal loss, class reweighting, and an ensemble of three models.
+
+\paragraph{Configuration highlights.}
+\begin{itemize}
+    \item \textbf{Input size:} $96 \times 96 \times 3$
+    \item \textbf{Backbone:} EfficientNetB0 pre-trained on ImageNet
+    \item \textbf{Loss:} Categorical Focal Crossentropy
+    \item \textbf{Optimizer:} Nadam with cosine decay
+    \item \textbf{Training strategy:} frozen-head phase followed by partial fine-tuning of the last 30 layers
+    \item \textbf{Inference:} mean prediction over 3 independently trained models
+\end{itemize}
+
+\paragraph{Results.} This experiment reaches \textbf{74.86\% accuracy}, \textbf{78.63\% mean recall}, and \textbf{75.14\% mean precision}. Its per-class behaviour is particularly strong on rare or visually distinctive categories: \textit{Helipad} achieves 100.00\% recall and 89.47\% F1-score, while \textit{Cargo plane} reaches 93.55\% F1-score. The main remaining weakness is \textit{Truck}, with only 38.68\% F1-score.
+
+\paragraph{Why it is interesting.} This notebook shows that even a relatively small EfficientNet backbone can already outperform the custom CNN baseline when combined with a careful fine-tuning schedule. It also suggests that transfer learning remains beneficial even when the input resolution is reduced to $96 \times 96$, which is computationally cheaper.
+
+\subsubsection{Experiment 2: EfficientNetB2 with Mixed Precision and MixUp (Notebook 3-9)}
+
+The second selected experiment scales the backbone up to \textbf{EfficientNetB2} and combines it with a more advanced training pipeline. Compared with Notebook 3-7, it uses a larger input size, stronger augmentation, MixUp, label smoothing, and mixed-precision training. The notebook again trains three models and averages their predictions at test time.
+
+\paragraph{Configuration highlights.}
+\begin{itemize}
+    \item \textbf{Input size:} $224 \times 224 \times 3$
+    \item \textbf{Backbone:} EfficientNetB2 pre-trained on ImageNet
+    \item \textbf{Optimization details:} mixed precision, Nadam, label smoothing (0.1)
+    \item \textbf{Augmentation:} random flips, random rotation, random zoom, brightness/contrast augmentation, MixUp ($\alpha=0.2$)
+    \item \textbf{Training strategy:} transfer learning followed by low-learning-rate fine-tuning
+    \item \textbf{Inference:} ensemble of 3 models
+\end{itemize}
+
+\paragraph{Results.} The model reaches \textbf{83.57\% accuracy}, \textbf{85.97\% mean recall}, and \textbf{86.64\% mean precision}. The resulting mean F1-score is approximately \textbf{86.99\%}. Several classes achieve near-saturated performance: \textit{Helipad} obtains 100.00\% recall, 100.00\% precision, and 100.00\% F1-score; \textit{Cargo plane} reaches 96.77\% F1-score; \textit{Pylon} reaches 95.65\% F1-score. Even the difficult \textit{Truck} class improves to 58.40\% F1-score.
+
+\paragraph{Why it is interesting.} This experiment demonstrates the value of \textbf{compound scaling} in EfficientNet~\autocite{tan2019efficientnet}. Moving from B0 to B2 while simultaneously strengthening the optimization pipeline yields a substantial improvement over both the custom CNNs and the simpler B0 transfer setup. It is also a strong example of how modern regularization techniques can help minority classes without sacrificing majority-class performance.
+
+\subsubsection{Experiment 3: EfficientNetB0 after Backbone Screening (Notebook 3-10)}
+
+The third experiment is especially informative because it begins with a \textbf{lightweight backbone screening stage}. A short grid search on a reduced subset of the data compares three transfer-learning backbones: EfficientNetB0, MobileNetV2, and ResNet50V2. Under this proxy evaluation, EfficientNetB0 performs best with 68.14\% validation accuracy, ahead of MobileNetV2 (48.22\%) and ResNet50V2 (36.98\%). The final experiment then trains the best backbone on the full dataset with architecture-specific preprocessing, MixUp, and three-model ensembling.
+
+\paragraph{Configuration highlights.}
+\begin{itemize}
+    \item \textbf{Input size:} $224 \times 224 \times 3$
+    \item \textbf{Backbone search:} EfficientNetB0, MobileNetV2, ResNet50V2
+    \item \textbf{Selected model:} EfficientNetB0
+    \item \textbf{Augmentation:} flips, brightness, MixUp ($\alpha=0.2$)
+    \item \textbf{Loss:} Categorical Crossentropy with label smoothing (0.1)
+    \item \textbf{Inference:} ensemble of 3 models
+\end{itemize}
+
+\paragraph{Results.} This final configuration achieves the best result among the supplementary notebooks: \textbf{83.96\% accuracy}, \textbf{85.95\% mean recall}, and \textbf{87.02\% mean precision}, corresponding to an approximate mean F1-score of \textbf{87.04\%}. It performs particularly well on \textit{Cargo plane} (97.30\% F1), \textit{Helipad} (96.97\% F1), \textit{Storage tank} (94.50\% F1), \textit{Pylon} (95.75\% F1), and \textit{Shipping container} (86.02\% F1). The \textit{Truck} class remains the hardest class, but its F1-score still improves to 58.86\%.
+
+\paragraph{Why it is interesting.} This experiment shows that a well-tuned \textbf{B0-scale backbone} can remain competitive with larger models when the surrounding pipeline is optimized. In other words, the difference between backbones is not the only driver of performance: preprocessing, augmentation, and model selection can be just as important. This makes the result especially relevant for practical settings where computational budget matters.
+
+\subsubsection{Cross-Experiment Discussion}
+
+These supplementary experiments reveal three consistent trends:
+\begin{enumerate}
+    \item \textbf{EfficientNet is a robust family for this dataset.} Both B0 and B2 produce strong results, suggesting that the EfficientNet design transfers well to overhead imagery.
+    \item \textbf{Training protocol matters as much as architecture.} The jump from the staged B0 setup (74.86\%) to the more optimized B0/B2 pipelines ($\approx 84\%$) is too large to be explained by backbone changes alone.
+    \item \textbf{Rare classes benefit from modern transfer-learning recipes.} In all three experiments, \textit{Helipad} becomes a strong class, reaching 89.47\%, 100.00\%, and 96.97\% F1-score respectively.
+\end{enumerate}
+
+\paragraph{Takeaway.} While the main report focuses on the controlled benchmark of Notebook 3-8, these additional experiments suggest that the best results in the broader project are obtained when \textbf{transfer learning is combined with stronger optimization recipes and ensemble inference}. They therefore provide a useful extended perspective on the architecture search carried out across the full notebook series.
